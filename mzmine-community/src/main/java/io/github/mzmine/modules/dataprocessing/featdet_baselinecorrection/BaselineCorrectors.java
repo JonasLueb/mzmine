@@ -31,11 +31,12 @@ import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.divide
 import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.loess.LoessBaselineCorrector;
 import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.neville.NevilleBaselineCorrector;
 import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.polynomial.PolynomialBaselineCorrection;
+import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.linalg.LinAlgBaselineCorrector;
 import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.spline.SplineBaselineCorrector;
 import io.github.mzmine.parameters.parametertypes.submodules.ModuleOptionsEnum;
 
 public enum BaselineCorrectors implements ModuleOptionsEnum<BaselineCorrector> {
-  LOESS, SPLINE, AKIMA, DIVIDED_DIFFERENCE, NEVILLE, CHANG, POLYNOMIAL;
+  LOESS, SPLINE, AKIMA, DIVIDED_DIFFERENCE, NEVILLE, CHANG, POLYNOMIAL, LINALG;
 
   @Override
   public Class<? extends BaselineCorrector> getModuleClass() {
@@ -47,6 +48,7 @@ public enum BaselineCorrectors implements ModuleOptionsEnum<BaselineCorrector> {
       case NEVILLE -> NevilleBaselineCorrector.class;
       case CHANG -> ChangBaselineCorrector.class;
       case POLYNOMIAL -> PolynomialBaselineCorrection.class;
+      case LINALG -> LinAlgBaselineCorrector.class;
     };
   }
 
@@ -60,6 +62,7 @@ public enum BaselineCorrectors implements ModuleOptionsEnum<BaselineCorrector> {
       case NEVILLE -> "neville_corrector";
       case CHANG -> "chang_corrector";
       case POLYNOMIAL -> "polynomial_corrector";
+      case LINALG -> "linalg_corrector";
     };
   }
 }
