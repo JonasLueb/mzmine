@@ -38,20 +38,68 @@ import io.github.mzmine.gui.chartbasics.simplechart.providers.impl.series.IonTim
 import io.github.mzmine.gui.chartbasics.simplechart.renderers.ColoredAreaShapeRenderer;
 import io.github.mzmine.gui.chartbasics.simplechart.renderers.ColoredXYLineRenderer;
 import io.github.mzmine.gui.chartbasics.simplechart.renderers.ColoredXYShapeRenderer;
+import io.github.mzmine.javafx.components.factories.FxButtons;
 import io.github.mzmine.javafx.concurrent.threading.FxThread;
 import io.github.mzmine.javafx.dialogs.DialogLoggerUtil;
+import io.github.mzmine.javafx.util.FxIcons;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.dialogs.previewpane.FeaturePreviewPane;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Button;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-class BaselineCorrectionPreview extends FeaturePreviewPane {
+public class BaselineCorrectionPreview extends FeaturePreviewPane {
 
+  private final VBox parentContainer;
+  private final Runnable onRemove;
+
+  // Original constructor for backwards compatibility
   public BaselineCorrectionPreview(ParameterSet parameterSet) {
+    this(parameterSet, null, null);
+  }
+
+  // Enhanced constructor for removable functionality
+  public BaselineCorrectionPreview(ParameterSet parameterSet, VBox parentContainer, Runnable onRemove) {
     super(parameterSet);
+    this.parentContainer = parentContainer;
+    this.onRemove = onRemove;
+    
+    // Only add close button if we have a parent container (removable mode)
+    if (parentContainer != null) {
+      setupCloseButton();
+    }
+  }
+
+  private void setupCloseButton() {
+    Button closeButton = FxButtons.createButton("", FxIcons.X, 
+        "Remove this preview", this::handleRemove);
+    closeButton.setStyle("-fx-font-size: 12px; -fx-padding: 2 4 2 4;");
+    
+    // Create simple header with just the close button
+    HBox header = new HBox();
+    header.setAlignment(Pos.CENTER_RIGHT);
+    header.setPadding(new Insets(2, 5, 2, 5));
+    header.getChildren().add(closeButton);
+    
+    // Set the header as the top of this BorderPane
+    setTop(header);
+  }
+
+  private void handleRemove() {
+    // Remove this preview from the parent container
+    parentContainer.getChildren().remove(this);
+    
+    // Call the onRemove callback if provided
+    if (onRemove != null) {
+      FxThread.runLater(onRemove);
+    }
   }
 
   @Override

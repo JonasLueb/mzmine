@@ -27,7 +27,9 @@ package io.github.mzmine.parameters.dialogs;
 
 import io.github.mzmine.javafx.components.factories.FxButtons;
 import io.github.mzmine.javafx.components.util.FxLayout;
+import io.github.mzmine.javafx.concurrent.threading.FxThread;
 import io.github.mzmine.javafx.util.FxIcons;
+import io.github.mzmine.modules.dataprocessing.featdet_baselinecorrection.BaselineCorrectionPreview;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.dialogs.previewpane.AbstractPreviewPane;
 import java.util.function.Function;
@@ -56,16 +58,14 @@ public class ParameterDialogWithPreviewPanes extends ParameterSetupDialogWithPre
     vbox.setFillWidth(true);
     previewWrapperPane.setBottom(
         FxButtons.createButton("Add preview", FxIcons.PLUS, "Add another preview",
-            () ->{
-              final AbstractPreviewPane<?> preview = createNewPreview.apply(parameters);
-              vbox.getChildren().add(preview);
-              VBox.setVgrow(preview, Priority.SOMETIMES);
-            }));
+            this::addNewPreview));
     previewWrapperPane.setCenter(scroll);
 
-    final AbstractPreviewPane<?> previewPane = createNewPreview.apply(parameters);
-    vbox.getChildren().add(previewPane);
-    VBox.setVgrow(previewPane, Priority.SOMETIMES);
+    // Set callback for when preview is shown to ensure there's always at least one preview
+    setOnPreviewShown(this::ensurePreviewExists);
+
+    // Add initial preview
+    addNewPreview();
   }
 
   public ParameterDialogWithPreviewPanes(boolean valueCheckRequired, ParameterSet parameters,
@@ -77,6 +77,54 @@ public class ParameterDialogWithPreviewPanes extends ParameterSetupDialogWithPre
   protected void parametersChanged() {
     super.parametersChanged();
     updatePreview();
+  }
+
+  private void addNewPreview() {
+    final AbstractPreviewPane<?> preview = createRemovablePreview();
+    vbox.getChildren().add(preview);
+    VBox.setVgrow(preview, Priority.SOMETIMES);
+    
+    // Scroll to show the new preview
+    FxThread.runLater(() -> {
+      scroll.layout();
+      scroll.setVvalue(1.0);
+    });
+  }
+
+  private AbstractPreviewPane<?> createRemovablePreview() {
+    // Create a test preview to check its type
+    AbstractPreviewPane<?> testPreview = createNewPreview.apply(this.parameterSet);
+    
+    // If it's a BaselineCorrectionPreview, create it with removable functionality
+    if (testPreview instanceof BaselineCorrectionPreview) {
+      return new BaselineCorrectionPreview(this.parameterSet, vbox, this::handlePreviewRemoval);
+    } else {
+      // For other preview types, use the original function
+      return testPreview;
+    }
+  }
+
+  private void ensurePreviewExists() {
+    // When "Show preview" is checked, ensure there's at least one preview pane
+    boolean hasPreviewPanes = vbox.getChildren().stream()
+        .anyMatch(n -> n instanceof AbstractPreviewPane<?>);
+    
+    if (!hasPreviewPanes) {
+      addNewPreview();
+    }
+  }
+
+  private void handlePreviewRemoval() {
+    // Update all remaining previews
+    updatePreview();
+    
+    // If no more preview panes exist, uncheck the "Show preview" checkbox
+    boolean hasPreviewPanes = vbox.getChildren().stream()
+        .anyMatch(n -> n instanceof AbstractPreviewPane<?>);
+    
+    if (!hasPreviewPanes && cbShowPreview != null) {
+      cbShowPreview.setSelected(false);
+    }
   }
 
   /**
