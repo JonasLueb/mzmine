@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2024 The mzmine Development Team
+ * Copyright (c) 2004-2025 The mzmine Development Team
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -49,28 +49,43 @@ public class ParameterDialogWithPreviewPanes extends ParameterSetupDialogWithPre
   private final Function<ParameterSet, AbstractPreviewPane<?>> createNewPreview;
 
   public ParameterDialogWithPreviewPanes(boolean valueCheckRequired, ParameterSet parameters,
-      Region message, @NotNull Function<ParameterSet, AbstractPreviewPane<?>> createNewPreview) {
+      Region message, @NotNull Function<ParameterSet, AbstractPreviewPane<?>> createNewPreview,
+      final boolean allowMultiplePreviews) {
     super(valueCheckRequired, parameters, message);
     this.createNewPreview = createNewPreview;
     scroll.setFitToWidth(true);
     scroll.setFitToHeight(true);
     scroll.setContent(vbox);
     vbox.setFillWidth(true);
-    previewWrapperPane.setBottom(
-        FxButtons.createButton("Add preview", FxIcons.PLUS, "Add another preview",
-            this::addNewPreview));
+    
+    // Add "Add preview" button only if multiple previews are allowed
+    if (allowMultiplePreviews) {
+      previewWrapperPane.setBottom(
+          FxButtons.createButton("Add preview", FxIcons.PLUS, "Add another preview",
+              this::addNewPreview));
+    }
     previewWrapperPane.setCenter(scroll);
 
-    // Set callback for when preview is shown to ensure there's always at least one preview
-    setOnPreviewShown(this::ensurePreviewExists);
+    // Set callbacks for when preview is shown
+    if (allowMultiplePreviews) {
+      setOnPreviewShown(this::ensurePreviewExists);
+    } else {
+      setOnPreviewShown(() -> parametersChanged());
+    }
 
     // Add initial preview
-    addNewPreview();
+    if (allowMultiplePreviews) {
+      addNewPreview();
+    } else {
+      final AbstractPreviewPane<?> previewPane = createNewPreview.apply(parameters);
+      vbox.getChildren().add(previewPane);
+      VBox.setVgrow(previewPane, Priority.SOMETIMES);
+    }
   }
 
   public ParameterDialogWithPreviewPanes(boolean valueCheckRequired, ParameterSet parameters,
       @NotNull Function<ParameterSet, AbstractPreviewPane<?>> createNewPreview) {
-    this(valueCheckRequired, parameters, null, createNewPreview);
+    this(valueCheckRequired, parameters, null, createNewPreview, true);
   }
 
   @Override
