@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2025 The mzmine Development Team
+ * Copyright (c) 2004-2022 The MZmine Development Team
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,26 +23,34 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package io.github.mzmine.parameters.parametertypes;
+package io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.wavelet;
 
-import java.util.function.Supplier;
+import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.FeatureResolverModule;
+import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.minimumsearch.MinimumSearchFeatureResolverParameters;
+import io.github.mzmine.parameters.ParameterSet;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-public record OptionalValue<T>(boolean active, T value) {
+public class WaveletResolverModule extends FeatureResolverModule {
 
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElse(T defaultValue) {
-    return active && value != null ? value : defaultValue;
+  public static final String NAME = "Wavelet feature resolver (experimental)";
+
+  @NotNull
+  @Override
+  public String getName() {
+    return NAME;
   }
 
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElseGet(Supplier<? extends T> defaultValue) {
-    return active && value != null ? value : defaultValue.get();
+  @Nullable
+  @Override
+  public Class<? extends ParameterSet> getParameterSetClass() {
+    return WaveletResolverParameters.class;
+  }
+
+  @NotNull
+  @Override
+  public String getDescription() {
+    return "Resolves EICs to features by wavelet transform. Supports retention time and mobility resolving.";
   }
 
 }

@@ -12,7 +12,6 @@
  *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
  * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -23,15 +22,20 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package io.github.mzmine.gui.chartbasics.simplechart.providers;
+package io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.wavelet;
 
-import java.awt.Paint;
+import com.google.common.collect.Range;
 
-public interface ZCategoryProvider extends XYZValueProvider {
+/**
+ * @param peakIndex Index of the peak max within this range
+ * @param peakY     Height of the peak max
+ * @param peakX     X value of the peak max
+ */
+record PeakRange(Range<Double> range, Range<Integer> indexRange, int peakIndex, double peakX, double peakY) {
 
-  int getNumberOfCategories();
-
-  String getLegendLabel(int category);
-
-  Paint getLegendItemColor(int category);
+  @Override
+  public String toString() {
+    return "PeakRange{range=" + range + ", peakIdx=" + peakIndex + ", peakY=" + String.format(
+        "%.2f", peakY) + "}";
+  }
 }

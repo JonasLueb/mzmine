@@ -23,26 +23,19 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package io.github.mzmine.parameters.parametertypes;
+package io.github.mzmine.gui.chartbasics.simplechart.providers;
 
-import java.util.function.Supplier;
+import java.awt.Shape;
+import org.jetbrains.annotations.NotNull;
 
-public record OptionalValue<T>(boolean active, T value) {
-
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElse(T defaultValue) {
-    return active && value != null ? value : defaultValue;
-  }
+/**
+ * Shapes for each item
+ */
+public interface ItemShapeProvider {
 
   /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
+   * @param item the index of a data point
+   * @return the shape of a dataset item
    */
-  public T orElseGet(Supplier<? extends T> defaultValue) {
-    return active && value != null ? value : defaultValue.get();
-  }
-
+  @NotNull Shape getItemShape(int item);
 }

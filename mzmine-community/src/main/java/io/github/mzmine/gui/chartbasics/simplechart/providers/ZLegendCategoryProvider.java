@@ -23,26 +23,27 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package io.github.mzmine.parameters.parametertypes;
+package io.github.mzmine.gui.chartbasics.simplechart.providers;
 
-import java.util.function.Supplier;
+import java.awt.Paint;
+import java.awt.Shape;
+import org.jetbrains.annotations.NotNull;
 
-public record OptionalValue<T>(boolean active, T value) {
+/**
+ * This is the legend categories that may not cover all data categories if there are too many like
+ * in gradient datasets
+ */
+public interface ZLegendCategoryProvider {
+
+  int getNumberOfLegendCategories();
+
+  @NotNull String getLegendCategoryLabel(int category);
+
+  @NotNull Paint getLegendCategoryItemColor(int category);
 
   /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
+   * @param category the index of the category
+   * @return the shape of a category
    */
-  public T orElse(T defaultValue) {
-    return active && value != null ? value : defaultValue;
-  }
-
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElseGet(Supplier<? extends T> defaultValue) {
-    return active && value != null ? value : defaultValue.get();
-  }
-
+  @NotNull Shape getLegendCategoryShape(int category);
 }

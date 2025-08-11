@@ -12,7 +12,6 @@
  *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
  * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -23,26 +22,19 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package io.github.mzmine.parameters.parametertypes;
+package io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.wavelet;
 
-import java.util.function.Supplier;
+/**
+ * @param index     Index in the original signal
+ * @param scale     Scale at which it was prominent
+ * @param cwtValue  CWT coefficient value at this point/scale
+ * @param originalY y-value in the original signal
+ */ // --- Helper Classes ---
+record PotentialPeak(int index, double scale, double cwtValue, double originalY) { /* ... as before ... */
 
-public record OptionalValue<T>(boolean active, T value) {
-
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElse(T defaultValue) {
-    return active && value != null ? value : defaultValue;
+  @Override
+  public String toString() {
+    return "PotentialPeak{index=" + index + ", scale=" + scale + ", cwtValue=" + String.format(
+        "%.2f", cwtValue) + ", y=" + String.format("%.2f", originalY) + "}";
   }
-
-  /**
-   * @return the actual value if optional is active and value is not null. Otherwise returns the
-   * default
-   */
-  public T orElseGet(Supplier<? extends T> defaultValue) {
-    return active && value != null ? value : defaultValue.get();
-  }
-
 }
