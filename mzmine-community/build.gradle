@@ -279,6 +279,30 @@ tasks.withType(JavaExec) {
     jvmArgs += '--enable-preview'
 }
 
+// Convenience runner for the standalone EIC resolver evaluator
+task runEICResolver(type: JavaExec) {
+    group = 'application'
+    description = 'Run the EICResolverRunner on a directory of *_full.tsv and *_ranges.tsv files.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.github.mzmine.tools.eicresolver.EICResolverRunner'
+    jvmArgs '--enable-preview'
+    // forward -D system properties (e.g., -DinputDir, -DoutDir, -Diou, -DminPoints)
+    systemProperties System.getProperties()
+    // Example usage:
+    //   ./gradlew :mzmine-community:runEICResolver -DinputDir=/abs/path -DoutDir=/abs/out -Diou=0.3 -DminPoints=3
+}
+
+// Run grid search in a single JVM (fast, avoids rebuild between configs)
+task runEICGrid(type: JavaExec) {
+    group = 'application'
+    description = 'Run hyperparameter grid for resolvers in-process.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.github.mzmine.tools.eicresolver.EICGridRunner'
+    jvmArgs '--enable-preview'
+    // pass through system properties
+    systemProperties System.getProperties()
+}
+
 /*
  * Set the basic Java runtime parameters (heap size etc.)
  */
@@ -686,4 +710,8 @@ afterEvaluate {
             }
         }
     }
+}
+
+tasks.register('printRuntimeClasspath') {
+  doLast { println sourceSets.main.runtimeClasspath.asPath }
 }

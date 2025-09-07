@@ -1,0 +1,128 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "DataImportTestGenerator",
+            "request": "launch",
+            "mainClass": "import_data.DataImportTestGenerator",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "MzMLConverterOptionsImportMain",
+            "request": "launch",
+            "mainClass": "import_data.convert_options_test.MzMLConverterOptionsImportMain",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "BatchSpeedTestMain",
+            "request": "launch",
+            "mainClass": "import_data.speed.BatchSpeedTestMain",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "ImportSpeedTestMain",
+            "request": "launch",
+            "mainClass": "import_data.speed.ImportSpeedTestMain",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "SmallDomBatchSpeedTestMain",
+            "request": "launch",
+            "mainClass": "import_data.speed.SmallDomBatchSpeedTestMain",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "FXCategoryChartGestureDemo",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.chartbasics.gui.javafx.demo.FXCategoryChartGestureDemo",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "FXChartGestureDemo",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.chartbasics.gui.javafx.demo.FXChartGestureDemo",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "FXCombinedChartGestureDemo",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.chartbasics.gui.javafx.demo.FXCombinedChartGestureDemo",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "SwingChartGestureDemo",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.chartbasics.gui.swing.demo.SwingChartGestureDemo",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "SwingCombinedChartGestureDemo",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.chartbasics.gui.swing.demo.SwingCombinedChartGestureDemo",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "JStrokeChooserDialog",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.gui.framework.strokechooser.JStrokeChooserDialog",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "MZmineCore",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.main.MZmineCore",
+            "projectName": "mzmine-community",
+            "vmArgs": "-Xmx4g -XX:+UseG1GC --enable-preview",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "java",
+            "name": "CombineIonModificationDialog",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.modules.dataprocessing.id_ion_identity_networking.ionidnetworking.actions.CombineIonModificationDialog",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "SizeSelectDialog",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.modules.io.spectraldbsubmit.view.SizeSelectDialog",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "IsotopePatternUtils",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.util.IsotopePatternUtils",
+            "projectName": "mzmine-community"
+        },
+        {
+            "type": "java",
+            "name": "LoggerStream",
+            "request": "launch",
+            "mainClass": "io.github.mzmine.util.LoggerStream",
+            "projectName": "mzmine-community"
+        }
+    ]
+}
