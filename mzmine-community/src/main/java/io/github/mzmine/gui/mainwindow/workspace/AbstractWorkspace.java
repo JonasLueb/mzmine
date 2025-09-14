@@ -75,6 +75,7 @@ import io.github.mzmine.modules.dataprocessing.id_ms2search.Ms2SearchModule;
 import io.github.mzmine.modules.dataprocessing.id_nist.NistMsSearchModule;
 import io.github.mzmine.modules.dataprocessing.id_online_reactivity.OnlineLcReactivityModule;
 import io.github.mzmine.modules.dataprocessing.id_spectral_library_match.SpectralLibrarySearchModule;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreVectorSearchModule;
 import io.github.mzmine.modules.io.export_ccsbase.CcsBaseExportModule;
 import io.github.mzmine.modules.io.export_compoundAnnotations_csv.CompoundAnnotationsCSVExportModule;
 import io.github.mzmine.modules.io.export_features_all_speclib_matches.ExportAllIdsGraphicalModule;
@@ -303,7 +304,8 @@ public abstract class AbstractWorkspace implements Workspace {
         BioTransformerModule.class);
     addModuleMenuItems(menu, "Search spectra", SpectralLibrarySearchModule.class,
         LipidAnnotationModule.class, NistMsSearchModule.class,
-        FormulaPredictionFeatureListModule.class, Ms2SearchModule.class);
+        FormulaPredictionFeatureListModule.class, Ms2SearchModule.class,
+        MS2DeepscoreVectorSearchModule.class);
     addModuleMenuItems(menu, "EC-MS workflow", CalcEcmsPotentialModule.class);
     menu.getItems().add(new SeparatorMenuItem());
     addModuleMenuItems(menu, ClearFeatureAnnotationsModule.class);

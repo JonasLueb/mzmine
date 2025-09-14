@@ -38,14 +38,21 @@ public class SpectralIdentificationResultsTab extends SimpleFeatureListTab {
   private final SpectraIdentificationResultsPane matchPane;
 
   public SpectralIdentificationResultsTab(final FeatureTableFX table) {
-    super("Spectral matches", false, false);
+    this(table, SpectraIdentificationResultsPane.MatchSource.SPECTRAL_LIBRARY);
+  }
 
-    matchPane = new SpectraIdentificationResultsPane(getParentGroup());
+  public SpectralIdentificationResultsTab(final FeatureTableFX table,
+      SpectraIdentificationResultsPane.MatchSource source) {
+    super(source == SpectraIdentificationResultsPane.MatchSource.SPECTRAL_LIBRARY ? "Spectral matches" : "MS2Deepscore matches", false, false);
+
+    // freeze current selection into this tab so switching tabs does not clear data
+    matchPane = new SpectraIdentificationResultsPane(getParentGroup(), source, true);
     setContent(matchPane);
     matchPane.setFeatureTable(table);
-    final var sub = table.getSelectionModel().selectedItemProperty().subscribe(
-        _ -> setSubTitle(table.getSelectedRows().stream().map(FeatureUtils::rowToString)
-            .collect(Collectors.joining(", "))));
-    setOnCloseRequest(_ -> sub.unsubscribe());
+    // snapshot current selection into this tab
+    final var snapshot = table.getSelectedRows();
+    matchPane.setRowsOnce(snapshot);
+    setSubTitle(snapshot.stream().map(FeatureUtils::rowToString).collect(Collectors.joining(", ")));
+    // no live subscription when frozen
   }
 }

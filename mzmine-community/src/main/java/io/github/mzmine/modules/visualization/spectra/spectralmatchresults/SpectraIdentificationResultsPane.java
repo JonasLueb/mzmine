@@ -26,6 +26,7 @@
 package io.github.mzmine.modules.visualization.spectra.spectralmatchresults;
 
 import io.github.mzmine.datamodel.features.FeatureListRow;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import io.github.mzmine.gui.framework.fx.features.AbstractFeatureListRowsPane;
 import io.github.mzmine.gui.framework.fx.features.ParentFeatureListPaneGroup;
 import io.github.mzmine.gui.mainwindow.MZmineTab;
@@ -35,6 +36,7 @@ import io.github.mzmine.main.MZmineCore;
 import io.github.mzmine.util.ExitCode;
 import io.github.mzmine.util.FeatureUtils;
 import io.github.mzmine.util.spectraldb.entry.SpectralDBAnnotation;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -92,8 +94,25 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
   private Label shownMatchesLbl;
   private TableColumn<SpectralDBAnnotation, SpectralDBAnnotation> column;
 
+  public enum MatchSource { SPECTRAL_LIBRARY, MS2DEEPSCORE }
+
+  private final MatchSource matchSource;
+  private final boolean freezeSelection;
+
   public SpectraIdentificationResultsPane(final ParentFeatureListPaneGroup parentGroup) {
+    this(parentGroup, MatchSource.SPECTRAL_LIBRARY, false);
+  }
+
+  public SpectraIdentificationResultsPane(final ParentFeatureListPaneGroup parentGroup,
+      final MatchSource matchSource) {
+    this(parentGroup, matchSource, false);
+  }
+
+  public SpectraIdentificationResultsPane(final ParentFeatureListPaneGroup parentGroup,
+      final MatchSource matchSource, final boolean freezeSelection) {
     super(parentGroup);
+    this.matchSource = matchSource;
+    this.freezeSelection = freezeSelection;
 
     noMatchesFound = new Label("I'm working on it");
     noMatchesFound.setFont(headerFont);
@@ -129,12 +148,38 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
   @Override
   public void onSelectedRowsChanged(final @NotNull List<? extends FeatureListRow> selectedRows) {
     super.onSelectedRowsChanged(selectedRows); // required for children
+    if (freezeSelection) {
+      return;
+    }
 
 
-    var allMatches = selectedRows.stream().map(FeatureListRow::getSpectralLibraryMatches)
-        .flatMap(Collection::stream).toList();
+    final List<SpectralDBAnnotation> allMatches = switch (matchSource) {
+      case SPECTRAL_LIBRARY -> selectedRows.stream()
+          .flatMap(row -> row.getSpectralLibraryMatches().stream()).toList();
+      case MS2DEEPSCORE -> selectedRows.stream()
+          .flatMap(row -> {
+            final var ms2 = row.get(MS2DeepscoreMatchesType.class);
+            return (ms2 == null ? java.util.stream.Stream.<SpectralDBAnnotation>empty()
+                : ms2.stream());
+          }).toList();
+    };
     setMatches(allMatches);
     setTitle(selectedRows);
+  }
+
+  public void setRowsOnce(final @NotNull List<? extends FeatureListRow> rows) {
+    final List<SpectralDBAnnotation> allMatches = switch (matchSource) {
+      case SPECTRAL_LIBRARY -> rows.stream()
+          .flatMap(row -> row.getSpectralLibraryMatches().stream()).toList();
+      case MS2DEEPSCORE -> rows.stream()
+          .flatMap(row -> {
+            final var ms2 = row.get(MS2DeepscoreMatchesType.class);
+            return (ms2 == null ? java.util.stream.Stream.<SpectralDBAnnotation>empty()
+                : ms2.stream());
+          }).toList();
+    };
+    setMatches(allMatches);
+    setTitle(rows);
   }
 
   @NotNull
@@ -276,7 +321,12 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
    * @param matches
    */
   public void setMatches(List<SpectralDBAnnotation> matches) {
-    totalMatches.setAll(matches);
+    // Filter out matches without library datapoints to avoid mirror plot errors
+    var usable = matches == null ? List.<SpectralDBAnnotation>of() : matches.stream()
+        .filter(m -> m != null && m.getEntry() != null && m.getEntry().getDataPoints() != null
+            && m.getEntry().getDataPoints().length > 0)
+        .toList();
+    totalMatches.setAll(usable);
     matchPanels.clear();
     // sort and show
     sortTotalMatches();

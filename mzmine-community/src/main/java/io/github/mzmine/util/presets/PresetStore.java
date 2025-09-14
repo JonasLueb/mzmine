@@ -271,11 +271,15 @@ public interface PresetStore<T extends Preset> {
    * @return list of existing presets with name also itself
    */
   default List<T> getPresetsForName(T preset) {
-    return getCurrentPresets().stream().filter(f -> f.equalsIgnoreCaseName(preset)).toList();
+    // snapshot to avoid ConcurrentModificationException while lists are updated on FX thread
+    final List<T> snapshot = List.copyOf(getCurrentPresets());
+    return snapshot.stream().filter(f -> f.equalsIgnoreCaseName(preset)).toList();
   }
 
   default Optional<T> getPresetForName(String name) {
-    return getCurrentPresets().stream()
+    // snapshot to avoid ConcurrentModificationException
+    final List<T> snapshot = List.copyOf(getCurrentPresets());
+    return snapshot.stream()
         .filter(f -> f.getFileName().equalsIgnoreCase(name) || f.name().equalsIgnoreCase(name))
         .findAny();
   }

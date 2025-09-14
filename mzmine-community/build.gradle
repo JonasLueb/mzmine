@@ -198,8 +198,10 @@ dependencies {
     implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5'
 
 //    implementation "org.du-lab.adap:adap:4.1.10"
-    implementation 'org.xerial:sqlite-jdbc:3.41.2.2'
-
+    // Milvus Java SDK
+    implementation 'io.milvus:milvus-sdk-java:2.6.2'
+    // Keep SQLite JDBC for Bruker import modules that require it
+    implementation 'org.xerial:sqlite-jdbc:3.45.1.0'
     implementation 'com.github.librepdf:openpdf:2.0.0'
     implementation "com.miglayout:miglayout:3.7.4"
 
@@ -655,7 +657,6 @@ tasks.compileJava.dependsOn(checkLicense, copyLicenseInformationToResources, cop
 tasks.processResources.dependsOn(copyLicenseInformationToResources, copyLicenseInformationToBuild)
 tasks.processResources.dependsOn(copyLicenseInformationToResources, copyLicenseInformationToBuild)
 
-
 // make sure the publish action is run after the semver plugin has been evaluated,
 // otherwise the version will always be 1.0.0
 afterEvaluate {
@@ -687,3 +688,4 @@ afterEvaluate {
         }
     }
 }
+

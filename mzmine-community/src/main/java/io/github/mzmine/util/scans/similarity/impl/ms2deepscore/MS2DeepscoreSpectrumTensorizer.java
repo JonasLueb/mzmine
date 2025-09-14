@@ -113,15 +113,6 @@ public class MS2DeepscoreSpectrumTensorizer {
   public TensorizedSpectra tensorizeSpectra(@NotNull List<? extends MassSpectrum> scans) {
     int originalSize = scans.size();
 
-    // requires precursor mz
-    scans = scans.stream().filter(scan -> ScanUtils.getPrecursorMz(scan) != null).toList();
-
-    if (originalSize > scans.size()) {
-      logger.info(
-          "List contained spectra without precursor m/z, those were filtered out. Remaining: %d; Total: %d".formatted(
-              scans.size(), originalSize));
-    }
-
     float[][] metadataVectors = new float[scans.size()][numBins];
     float[][] fragmentVectors = new float[scans.size()][numBins];
 
@@ -130,6 +121,7 @@ public class MS2DeepscoreSpectrumTensorizer {
 
       Double precursorMz = ScanUtils.getPrecursorMz(spectrum);
       PolarityType polarity = ScanUtils.getPolarity(spectrum);
+      // metadata is optional; if precursor is null, tensorizeMetadata returns null
       metadataVectors[i] = tensorizeMetadata(precursorMz, polarity);
 
       // extract masslist if scan otherwise use fragments directly

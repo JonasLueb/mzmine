@@ -177,12 +177,16 @@ public class SpectralDBAnnotation implements FeatureAnnotation, Comparable<Spect
     return switch (tag) {
       case ORIGINAL -> requireNonNullElse(entry.getDataPoints(), new DataPoint[0]);
       case FILTERED -> requireNonNullElse(similarity.getLibrary(), new DataPoint[0]);
-      case ALIGNED -> requireNonNullElse(similarity.getAlignedDataPoints()[0], new DataPoint[0]);
+      case ALIGNED -> {
+        var aligned = similarity.getAlignedDataPoints();
+        yield (aligned != null && aligned.length > 0 && aligned[0] != null) ? aligned[0]
+            : new DataPoint[0];
+      }
       case MERGED, ALIGNED_MODIFIED -> new DataPoint[0];
       case UNALIGNED -> {
         var input = getLibraryDataPoints(DataPointsTag.FILTERED);
-        var aligned = Set.of(getLibraryDataPoints(DataPointsTag.ALIGNED));
-        yield Arrays.stream(input).filter(dp -> !aligned.contains(dp)).toArray(DataPoint[]::new);
+        var alignedLib = Set.of(getLibraryDataPoints(DataPointsTag.ALIGNED));
+        yield Arrays.stream(input).filter(dp -> !alignedLib.contains(dp)).toArray(DataPoint[]::new);
       }
     };
   }
@@ -199,12 +203,16 @@ public class SpectralDBAnnotation implements FeatureAnnotation, Comparable<Spect
         yield dp;
       }
       case FILTERED -> requireNonNullElse(similarity.getQuery(), new DataPoint[0]);
-      case ALIGNED -> requireNonNullElse(similarity.getAlignedDataPoints()[1], new DataPoint[0]);
+      case ALIGNED -> {
+        var aligned = similarity.getAlignedDataPoints();
+        yield (aligned != null && aligned.length > 1 && aligned[1] != null) ? aligned[1]
+            : new DataPoint[0];
+      }
       case MERGED, ALIGNED_MODIFIED -> new DataPoint[0];
       case UNALIGNED -> {
         var input = getQueryDataPoints(DataPointsTag.FILTERED);
-        var aligned = Set.of(getQueryDataPoints(DataPointsTag.ALIGNED));
-        yield Arrays.stream(input).filter(dp -> !aligned.contains(dp)).toArray(DataPoint[]::new);
+        var alignedQuery = Set.of(getQueryDataPoints(DataPointsTag.ALIGNED));
+        yield Arrays.stream(input).filter(dp -> !alignedQuery.contains(dp)).toArray(DataPoint[]::new);
       }
     };
   }
@@ -359,7 +367,13 @@ public class SpectralDBAnnotation implements FeatureAnnotation, Comparable<Spect
 
   @Override
   public String toString() {
-    return String.format("%s (%.3f)", getCompoundName(), requireNonNullElse(getScore(), 0f));
+    String name = getCompoundName();
+    if (name == null || name.isBlank()) {
+      Object id = entry.getOrElse(DBEntryField.ENTRY_ID, null);
+      name = id != null ? id.toString() : "";
+    }
+    float score = requireNonNullElse(getScore(), 0f);
+    return name + " (" + String.format("%.3f", score) + ")";
   }
 
   @Override

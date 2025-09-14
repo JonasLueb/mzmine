@@ -42,6 +42,7 @@ import io.github.mzmine.modules.visualization.featurelisttable_modular.FeatureTa
 import io.github.mzmine.modules.visualization.molstructure.MolStructureViewer;
 import io.github.mzmine.modules.visualization.molstructure.StructureTableCell;
 import io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectralIdentificationResultsTab;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import java.util.List;
 import java.util.logging.Logger;
 import javafx.beans.property.Property;
@@ -119,7 +120,11 @@ public class MolecularStructureType extends DataType<MolecularStructure> impleme
         CompoundDatabaseMatchTab tab = new CompoundDatabaseMatchTab(table);
         MZmineCore.getDesktop().addTab(tab);
       } else if (superType instanceof SpectralLibraryMatchesType) {
-        MZmineCore.getDesktop().addTab(new SpectralIdentificationResultsTab(table));
+        MZmineCore.getDesktop().addTab(new SpectralIdentificationResultsTab(table,
+            io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectraIdentificationResultsPane.MatchSource.SPECTRAL_LIBRARY));
+      } else if (superType instanceof MS2DeepscoreMatchesType) {
+        MZmineCore.getDesktop().addTab(new SpectralIdentificationResultsTab(table,
+            io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectraIdentificationResultsPane.MatchSource.MS2DEEPSCORE));
       } else {
         new MolStructureViewer("", structure.structure()).show();
       }

@@ -41,6 +41,7 @@ import io.github.mzmine.datamodel.features.types.annotations.LipidMatchListType;
 import io.github.mzmine.datamodel.features.types.annotations.ManualAnnotationType;
 import io.github.mzmine.datamodel.features.types.identifiers.MasstUrlType;
 import io.github.mzmine.datamodel.features.types.annotations.SmilesStructureType;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.SpectralLibraryMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.SplashType;
 import io.github.mzmine.datamodel.features.types.identifiers.UsiType;
@@ -213,7 +214,7 @@ public class DataTypes {
         GNPSClusterUrlType.class, CompoundDatabaseMatchesType.class, CommentType.class,
         // combined types with sub columns
         AlignmentMainType.class, NetworkStatsType.class, IonIdentityListType.class,
-        SpectralLibraryMatchesType.class, CompoundDatabaseMatchesType.class,
+        SpectralLibraryMatchesType.class, MS2DeepscoreMatchesType.class, CompoundDatabaseMatchesType.class,
         LipidMatchListType.class, ConsensusFormulaListType.class, SimpleFormulaListType.class,
         FormulaListType.class, ManualAnnotationType.class,
         // graphical columns

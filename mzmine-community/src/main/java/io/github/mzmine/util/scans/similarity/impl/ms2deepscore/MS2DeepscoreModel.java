@@ -71,12 +71,7 @@ public class MS2DeepscoreModel extends EmbeddingBasedSimilarity implements AutoC
      */
     model = criteria.loadModel();
     MS2DeepscoreSettings settings = MS2DeepscoreSettings.load(settingsFilePath.toFile());
-    // TODO just read json to record and compare those
-    if (!Arrays.deepToString(settings.additionalMetadata()).equals(
-        "[[StandardScaler, {metadata_field=precursor_mz, mean=0.0, standard_deviation=1000.0}], [CategoricalToBinary, {metadata_field=ionmode, entries_becoming_one=positive, entries_becoming_zero=negative}]]")) {
-      throw new RuntimeException(
-          "The model uses an additional metadata format that is not supported. Please use the default MS2Deepscore model or ask the developers for support.");
-    }
+    // Validate and parse additional metadata in the tensorizer; allow standard variants/orderings
     this.spectrumTensorizer = new MS2DeepscoreSpectrumTensorizer(settings);
     this.ndManager = NDManager.newBaseManager();
     this.predictor = model.newPredictor();
@@ -99,6 +94,10 @@ public class MS2DeepscoreModel extends EmbeddingBasedSimilarity implements AutoC
   @Override
   public NDArray predictEmbedding(List<? extends MassSpectrum> scans) throws TranslateException {
     TensorizedSpectra tensorizedSepctra = spectrumTensorizer.tensorizeSpectra(scans);
+    if (tensorizedSepctra.tensorizedFragments() == null
+        || tensorizedSepctra.tensorizedFragments().length == 0) {
+      throw new TranslateException("No valid scans with precursor m/z available for embedding.");
+    }
     return predictEmbeddingFromTensors(tensorizedSepctra);
   }
 

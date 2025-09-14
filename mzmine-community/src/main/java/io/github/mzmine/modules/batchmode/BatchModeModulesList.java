@@ -118,6 +118,7 @@ import io.github.mzmine.modules.dataprocessing.id_nist.NistMsSearchModule;
 import io.github.mzmine.modules.dataprocessing.id_online_reactivity.OnlineLcReactivityModule;
 import io.github.mzmine.modules.dataprocessing.id_precursordbsearch.PrecursorDBSearchModule;
 import io.github.mzmine.modules.dataprocessing.id_spectral_library_match.SpectralLibrarySearchModule;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreVectorSearchModule;
 import io.github.mzmine.modules.dataprocessing.id_spectral_library_match.library_to_featurelist.SpectralLibraryToFeatureListModule;
 import io.github.mzmine.modules.dataprocessing.norm_linear.LinearNormalizerModule;
 import io.github.mzmine.modules.dataprocessing.norm_ri.RICalculationModule;
@@ -387,6 +388,7 @@ public class BatchModeModulesList {
           NistMsSearchModule.class, //
           PrecursorDBSearchModule.class, //
           SpectralLibrarySearchModule.class, //
+          MS2DeepscoreVectorSearchModule.class, //
           BioTransformerModule.class, //
 
           /*
