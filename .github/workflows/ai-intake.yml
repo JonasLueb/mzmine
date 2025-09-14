@@ -1,0 +1,60 @@
+name: AI Issue Intake
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+  contents: read
+  models: read
+
+jobs:
+  ai_intake:
+    if: contains(github.event.issue.labels.*.name, 'request ai review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure labels exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = ['request ai review', 'type:bug', 'question', 'installation'];
+            for (const name of labels) {
+              try {
+                await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name });
+              } catch (e) {
+                await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, name, color: 'ededed' });
+              }
+            }
+
+      - name: Run AI assessment and labeler
+        uses: github/ai-assessment-comment-labeler@v1
+        with:
+          issue_number: ${{ github.event.issue.number }}
+          issue_body: ${{ github.event.issue.body }}
+          owner: ${{ github.repository_owner }}
+          repo_name: ${{ github.event.repository.name }}
+          ai_review_label: request ai review
+          prompts_directory: ./Prompts
+          labels_to_prompts_mapping: |
+            type:bug,bug-review.prompt.yml
+            question,usage-check.prompt.yml
+            installation,env-triage.prompt.yml
+
+      - name: Remove trigger label to allow re-run on re-add
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+            const label = 'request ai review';
+            try {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+            } catch (e) {
+              // ignore if already removed
+            }

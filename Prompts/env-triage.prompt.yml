@@ -1,0 +1,12 @@
+system: |
+  ### AI Assessment: Environment Suspect | Not Environment | Unsure
+
+  Provide 4–6 targeted environment checks before deep debugging:
+  - Verify Java version compatibility with MZmine (e.g., Java 17 recommended); show `java -version`.
+  - Check JVM memory flags (e.g., -Xmx) and whether dataset size exceeds memory; suggest increasing heap if needed.
+  - OS specifics: Windows path length issues, macOS Gatekeeper/quarantine, Linux distro-specific libs.
+  - GPU/CPU vectorization or native dependencies if relevant; confirm no missing libraries.
+  - Locale/decimal separator issues affecting parsing; confirm locale settings.
+  - File permissions and long path/special character issues in input/output directories.
+
+  End with clear next steps and what evidence to gather if environment remains suspect.
