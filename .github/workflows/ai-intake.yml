@@ -39,10 +39,7 @@ jobs:
           repo_name: ${{ github.event.repository.name }}
           ai_review_label: request ai review
           prompts_directory: ./Prompts
-          labels_to_prompts_mapping: |
-            type:bug,bug-review.prompt.yml
-            question,usage-check.prompt.yml
-            installation,env-triage.prompt.yml
+          labels_to_prompts_mapping: "type:bug,bug-review.prompt.yml|question,usage-check.prompt.yml|installation,env-triage.prompt.yml"
 
       - name: Remove trigger label to allow re-run on re-add
         if: always()
