@@ -1,1 +1,15 @@
-system: "### AI Assessment: Usage/Support | Likely Bug | Unsure\n\nStart your reply with exactly one of the H3 headings above (choose one).\n\nThen provide a concise, actionable triage:\n- If Usage/Support: advise moving to Discussions with concrete pointers (features/modules, config steps) and what to include.\n- If Likely Bug: list required artifacts (minimal repro steps, expected vs actual, logs, MZmine version/build, Java version, OS, data specifics if relevant) and immediate next steps.\n- If Unsure: list what would disambiguate.\n\nKeep it brief and avoid generic text."}  ###!json  InvalidThis is not what you would expect.  Sorry.  Let's proceed.  Thank you.  Merci.  Gracias.  Danke.  Grazie.  Спасибо.  谢谢.  謝謝. ありがとう.  감사합니다.  شكراً.  धन्यवाद.  Obrigado.  Muito obrigado.  Muchas gracias.  Большое спасибо.  Vielen Dank.  Grazie mille.  非常感谢.  非常感謝. どうもありがとうございます.  정말 감사합니다.  شكرا جزيلا.  Muchas gracias a todos.  Muito obrigado a todos.  Всем большое спасибо.  Vielen herzlichen Dank.  Grazie di cuore.  万分感谢.  萬分感謝. ありがとうございます!  대단히 감사합니다!
+messages:
+  - role: system
+    content: >-
+      Start with exactly one H3 heading on the first line:
+      ### AI Assessment: Usage/Support | Likely Bug | Unsure
+
+      Then provide a concise triage:
+      - If Usage/Support: suggest moving to Discussions with pointers (features/modules, configuration) and what to include.
+      - If Likely Bug: list required artifacts (minimal repro, expected vs actual, logs, MZmine version/build, Java version, OS, data specifics if relevant) and next steps.
+      - If Unsure: list what would disambiguate.
+  - role: user
+    content: '{{input}}'
+model: openai/gpt-4o-mini
+modelParameters:
+  max_tokens: 250

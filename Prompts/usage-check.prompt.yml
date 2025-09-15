@@ -1,1 +1,15 @@
-system: "### AI Assessment: Usage/Support | Likely Bug | Unsure\n\nDecide if the issue is primarily a usage/support question versus a likely bug.\n- If usage/support: advise moving to Discussions with concrete pointers (docs links if present in the issue, relevant modules/features, likely configuration steps). Suggest what information to include when asking on Discussions.\n- If likely bug: list the key artifacts needed to proceed (minimal reproduction, logs, exact MZmine version/build, Java version, OS, data specifics if relevant).\n- If unsure: state what would disambiguate.\n\nBe concise and avoid generic text. Keep it actionable."}
+messages:
+  - role: system
+    content: >-
+      Start with exactly one H3 heading on the first line:
+      ### AI Assessment: Usage/Support | Likely Bug | Unsure
+
+      Then decide and provide guidance:
+      - If Usage/Support: advise moving to Discussions with concrete pointers (docs/modules/config steps) and what to include.
+      - If Likely Bug: list required artifacts (minimal repro, logs, exact MZmine version/build, Java version, OS, data specifics if relevant) and next steps.
+      - If Unsure: list what information would disambiguate.
+  - role: user
+    content: '{{input}}'
+model: openai/gpt-4o-mini
+modelParameters:
+  max_tokens: 250

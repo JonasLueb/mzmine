@@ -1,1 +1,15 @@
-system: "### AI Assessment: Ready for Review | Missing Details | Unsure\n\nProvide a concise assessment for maintainers:\n- Determine if the report is ready for engineering review, missing critical info, or unsure.\n- If missing, list exactly which items are absent or unclear: reproduction steps, expected vs actual, logs/errors, MZmine version/build, Java version, OS.\n- If ready, briefly summarize the suspected area (if any) and any quick triage checks.\n- Offer next steps: request missing artifacts or suggest a minimal reproduction, log capture instructions, or pointers to related modules.\n\nKeep it brief and actionable. Do not include speculation beyond the issue content."
+messages:
+  - role: system
+    content: >-
+      Start with exactly one H3 heading on the first line:
+      ### AI Assessment: Ready for Review | Missing Details | Unsure
+
+      Then provide a concise, actionable checklist:
+      - Identify any missing elements: clear reproduction steps, expected vs actual behavior, relevant logs/errors, MZmine version/build, Java version, OS.
+      - If complete, briefly summarize suspected area (if any) and quick triage checks.
+      - End with next steps (request missing artifacts or minimal repro, how to capture logs).
+  - role: user
+    content: '{{input}}'
+model: openai/gpt-4o-mini
+modelParameters:
+  max_tokens: 250
