@@ -1,0 +1,36 @@
+{
+    "format": "msp",
+    "intensity_normalization": "999_max_to_unit",
+    "field_map": {
+      "name": "compound_name",
+      "formula": "formula",
+      "precursormz": "precursor_mz",
+      "precursor m/z": "precursor_mz",
+      "precursor mz": "precursor_mz",
+      "DB#": "db_id",
+      "exactmass": "exact_mass",
+      "adduct": "adduct",
+      "collision_energy": "collision_energy",
+      "instrument_type": "instrument_type",
+      "instrument": "instrument",
+      "smiles": "smiles",
+      "inchi": "inchi",
+      "inchikey": "inchikey",
+      "accession": "accession",
+      "ion_mode": "ionmode",
+      "ionmode": "ionmode",
+      "ms_mode": "ionmode"
+    },
+    "value_normalization": {
+      "ionmode": {
+        "positive": "positive",
+        "+": "positive",
+        "pos": "positive",
+        "negative": "negative",
+        "-": "negative",
+        "neg": "negative"
+      }
+    },
+    "ext_id_fields": ["db_id", "accession", "compound_name"],
+    "store_peaks": "full"
+  }

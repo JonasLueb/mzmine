@@ -1,0 +1,234 @@
+{
+  "manifest_version": "1.0",
+  "db": {
+    "uri": "http://localhost:19530",
+    "generated_at": "2025-09-09T11:29:27.120311Z",
+    "generator": "ms2ds_milvus_mvp.py",
+    "counts": {
+      "vectors": 103289,
+      "collections": 2
+    },
+    "label_by": "db_id",
+    "split_by_ionmode": true,
+    "meta_keys_union": [
+      "collision_energy",
+      "db_id",
+      "ext_id",
+      "formula",
+      "inchi",
+      "inchikey",
+      "instrument",
+      "instrument_type",
+      "ionmode",
+      "num_peaks",
+      "peaks",
+      "peaks_unit",
+      "precursor_mz",
+      "smiles",
+      "source"
+    ],
+    "schema_hash_md5": "877e9788c7a37250da50bc3f10c99281"
+  },
+  "collections": [
+    {
+      "name": "ms2ds_lc_esi_negative",
+      "description": "Embeddings from MassBank.msp_NIST",
+      "model": {
+        "name": "MS2Deepscore (dual-mode)",
+        "source": "https://zenodo.org/records/16962640",
+        "embedding_dim": 500
+      },
+      "schema": {
+        "primary_key": {
+          "name": "id",
+          "type": "INT64",
+          "auto_id": true
+        },
+        "vector_field": {
+          "name": "vector",
+          "type": "FLOAT_VECTOR",
+          "dim": 500,
+          "metric": "COSINE"
+        },
+        "index": {
+          "type": "AUTOINDEX",
+          "params": {}
+        },
+        "fields": [
+          {
+            "name": "ext_id",
+            "type": "VARCHAR(256)"
+          },
+          {
+            "name": "precursor_mz",
+            "type": "FLOAT"
+          },
+          {
+            "name": "meta",
+            "type": "JSON"
+          }
+        ]
+      },
+      "source": {
+        "dataset": "MassBank.msp_NIST",
+        "path": "/Users/A14D579/Documents/Privat/mzanalytics/mzconnect/prototyping/spectral_libraries/MassBank.msp_NIST",
+        "format": "msp",
+        "schema_file": "/Users/A14D579/Documents/Privat/mzanalytics/mzconnect/prototyping/massbank_msp_NIST_schema.json",
+        "split_policy": "ionmode: negative"
+      },
+      "query_requirements": {
+        "intensity_expected": "unit_max",
+        "filters_supported": [
+          "precursor_mz"
+        ],
+        "filter_field_types": {
+          "precursor_mz": "FLOAT"
+        },
+        "optional_query_keys": [
+          "precursor_mz"
+        ]
+      },
+      "preprocessing_contract": {
+        "ms_level": "MS2 only",
+        "ionmode": "'positive' or 'negative'",
+        "peaks": {
+          "sorted_by": "mz ascending",
+          "storage_peaks_unit": "as in source (MassBank typically max=999); no rescaling on storage",
+          "embedding_input_intensity_normalization": "unit_max (divide each spectrum's intensities by its max; if max<=0 leave as-is)",
+          "store": "full or top-N as configured"
+        },
+        "replication_notes": "You can directly normalize to unit_max for embeddings; no need to scale to 999 first.",
+        "precursor_mz": "float; fallback to max(mz) if missing",
+        "embedding_model": "MS2DeepScore (Zenodo 16962640)",
+        "vector_metric": "COSINE"
+      },
+      "meta_schema": {
+        "common_keys": [
+          "collision_energy",
+          "db_id",
+          "ext_id",
+          "formula",
+          "inchi",
+          "inchikey",
+          "instrument",
+          "instrument_type",
+          "ionmode",
+          "num_peaks",
+          "peaks",
+          "peaks_unit",
+          "precursor_mz",
+          "smiles",
+          "source"
+        ],
+        "peaks": {
+          "key": "peaks",
+          "type": "array[[mz, intensity]]",
+          "unit": "arbitrary_999_max"
+        }
+      },
+      "counts": {
+        "vectors": 33465
+      }
+    },
+    {
+      "name": "ms2ds_lc_esi_positive",
+      "description": "Embeddings from MassBank.msp_NIST",
+      "model": {
+        "name": "MS2Deepscore (dual-mode)",
+        "source": "https://zenodo.org/records/16962640",
+        "embedding_dim": 500
+      },
+      "schema": {
+        "primary_key": {
+          "name": "id",
+          "type": "INT64",
+          "auto_id": true
+        },
+        "vector_field": {
+          "name": "vector",
+          "type": "FLOAT_VECTOR",
+          "dim": 500,
+          "metric": "COSINE"
+        },
+        "index": {
+          "type": "AUTOINDEX",
+          "params": {}
+        },
+        "fields": [
+          {
+            "name": "ext_id",
+            "type": "VARCHAR(256)"
+          },
+          {
+            "name": "precursor_mz",
+            "type": "FLOAT"
+          },
+          {
+            "name": "meta",
+            "type": "JSON"
+          }
+        ]
+      },
+      "source": {
+        "dataset": "MassBank.msp_NIST",
+        "path": "/Users/A14D579/Documents/Privat/mzanalytics/mzconnect/prototyping/spectral_libraries/MassBank.msp_NIST",
+        "format": "msp",
+        "schema_file": "/Users/A14D579/Documents/Privat/mzanalytics/mzconnect/prototyping/massbank_msp_NIST_schema.json",
+        "split_policy": "ionmode: positive"
+      },
+      "query_requirements": {
+        "intensity_expected": "unit_max",
+        "filters_supported": [
+          "precursor_mz"
+        ],
+        "filter_field_types": {
+          "precursor_mz": "FLOAT"
+        },
+        "optional_query_keys": [
+          "precursor_mz"
+        ]
+      },
+      "preprocessing_contract": {
+        "ms_level": "MS2 only",
+        "ionmode": "'positive' or 'negative'",
+        "peaks": {
+          "sorted_by": "mz ascending",
+          "storage_peaks_unit": "as in source (MassBank typically max=999); no rescaling on storage",
+          "embedding_input_intensity_normalization": "unit_max (divide each spectrum's intensities by its max; if max<=0 leave as-is)",
+          "store": "full or top-N as configured"
+        },
+        "replication_notes": "You can directly normalize to unit_max for embeddings; no need to scale to 999 first.",
+        "precursor_mz": "float; fallback to max(mz) if missing",
+        "embedding_model": "MS2DeepScore (Zenodo 16962640)",
+        "vector_metric": "COSINE"
+      },
+      "meta_schema": {
+        "common_keys": [
+          "collision_energy",
+          "db_id",
+          "ext_id",
+          "formula",
+          "inchi",
+          "inchikey",
+          "instrument",
+          "instrument_type",
+          "ionmode",
+          "num_peaks",
+          "peaks",
+          "peaks_unit",
+          "precursor_mz",
+          "smiles",
+          "source"
+        ],
+        "peaks": {
+          "key": "peaks",
+          "type": "array[[mz, intensity]]",
+          "unit": "arbitrary_999_max"
+        }
+      },
+      "counts": {
+        "vectors": 69824
+      }
+    }
+  ]
+}
