@@ -1,8 +1,7 @@
 name: Bug report
 description: Report a reproducible problem in MZmine
 labels:
-  - type:bug
-  - needs-triage
+  - type: Bug
 title: "[Bug]: "
 body:
   - type: textarea
@@ -27,11 +26,48 @@ body:
   - type: textarea
     id: actual
     attributes:
-      label: Actual behavior / logs
-      description: What actually happened? Include stack traces or relevant logs.
-      render: shell
+      label: Actual behavior
+      description: What actually happened?
     validations:
       required: true
+  - type: textarea
+    id: parameters
+    attributes:
+      label: Parameters used
+      description: List all relevant MZmine module parameters you used.
+      placeholder: |
+        Module: ...
+        Parameter A: ...
+        Parameter B: ...
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces
+      description: Paste relevant parts of your log (mzmine.log) or stack traces.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Paste screenshots of errors or UI state here (drag-and-drop images into this field).
+    validations:
+      required: false
+  - type: textarea
+    id: example_project
+    attributes:
+      label: Example project or data
+      description: |
+        Provide a link to a small, standalone MZmine project demonstrating the problem.
+        Alternatively, include a batch file plus minimal raw files to reproduce.
+        You may use cloud storage links (e.g., Google Drive, Dropbox). Issues without an example project are unlikely to be processed.
+      placeholder: |
+        Link to example project or data:
+    validations:
+      required: false
   - type: input
     id: mzmine_version
     attributes:
@@ -54,8 +90,8 @@ body:
       label: Operating system
       multiple: false
       options:
-        - macOS
         - Windows
         - Linux
+        - macOS
     validations:
       required: true
