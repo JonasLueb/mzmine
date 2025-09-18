@@ -33,6 +33,7 @@ import io.github.mzmine.parameters.parametertypes.StringParameter;
 import io.github.mzmine.parameters.parametertypes.filenames.FileNameParameter;
 import io.github.mzmine.parameters.parametertypes.filenames.FileSelectionType;
 import io.github.mzmine.parameters.parametertypes.BooleanParameter;
+import io.github.mzmine.parameters.parametertypes.ComboParameter;
 import io.github.mzmine.parameters.parametertypes.selectors.FeatureListsParameter;
 import io.github.mzmine.parameters.parametertypes.tolerances.MZToleranceParameter;
 import io.github.mzmine.modules.dataprocessing.filter_scan_merge_select.SpectraMergeSelectParameter;
@@ -77,20 +78,52 @@ public class MS2DeepscoreVectorSearchParameters extends SimpleParameterSet {
 
   public static final MZToleranceParameter PRECURSOR_TOL = new MZToleranceParameter(
       "Precursor m/z filter",
-      "Optional candidate prefilter in the vector DB using precursor m/z.", 0.01, 25);
+      "Optional candidate prefilter in the vector DB using precursor m/z.", 0.01, 20);
+
+  // Used only to calculate matched signals and explained intensity by aligning spectra
+  public static final MZToleranceParameter SPECTRAL_TOL = new MZToleranceParameter(
+      "Spectral m/z tolerance",
+      "Tolerance to align query and library spectra for matched signals and explained intensity reporting.",
+      0.01, 20);
 
   public static final BooleanParameter CONFIRM_WITH_COSINE = new BooleanParameter(
       "Confirm with cosine", "Optionally fetch hit spectra and compute conventional cosine.",
       false);
 
+  public enum SearchMode {
+    DIRECT_ONLY("Direct hits only"),
+    ANALOG_ONLY("Analog hits only"),
+    DIRECT_AND_ANALOG("Direct and analog (two-stage)");
+
+    private final String label;
+
+    SearchMode(String label) {
+      this.label = label;
+    }
+
+    @Override
+    public String toString() {
+      return label;
+    }
+  }
+
+  public static final ComboParameter<SearchMode> SEARCH_MODE = new ComboParameter<>(
+      "Search mode",
+      "Choose whether to restrict the query to direct precursor-matched hits, analog hits, or run both searches (direct first, then analog).",
+      SearchMode.values(), SearchMode.DIRECT_ONLY);
+
+  public static final BooleanParameter USE_SEPARATE_COLUMNS = new BooleanParameter(
+      "Use separate MS2Deepscore columns",
+      "If enabled, results are shown in a separate MS2Deepscore column group. If disabled, results appear in the Spectral library matches columns.",
+      false);
+
   public MS2DeepscoreVectorSearchParameters() {
     super(new Parameter[]{PEAK_LISTS, MS_LEVEL, SPECTRA_SELECT, MODEL_FILE, SETTINGS_FILE, DB_URI,
-        COLLECTION_POS, COLLECTION_NEG, TOP_K, MIN_SCORE, PRECURSOR_TOL, CONFIRM_WITH_COSINE});
+        COLLECTION_POS, COLLECTION_NEG, TOP_K, MIN_SCORE, PRECURSOR_TOL, SPECTRAL_TOL,
+        CONFIRM_WITH_COSINE, SEARCH_MODE, USE_SEPARATE_COLUMNS});
     // set sensible defaults for the local dev environment
     DB_URI.setValue("milvus://localhost:19530?db=mz_connect_mvp");
     MODEL_FILE.setValue(new java.io.File("build/generated/ms2ds_dual/ms2deepscore_model_java.pt"));
     SETTINGS_FILE.setValue(new java.io.File("build/generated/ms2ds_dual/settings.json"));
   }
 }
-
-

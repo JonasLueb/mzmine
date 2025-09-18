@@ -26,6 +26,7 @@
 package io.github.mzmine.modules.visualization.spectra.spectralmatchresults;
 
 import io.github.mzmine.datamodel.features.FeatureListRow;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreAnalogMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import io.github.mzmine.gui.framework.fx.features.AbstractFeatureListRowsPane;
 import io.github.mzmine.gui.framework.fx.features.ParentFeatureListPaneGroup;
@@ -33,6 +34,7 @@ import io.github.mzmine.gui.mainwindow.MZmineTab;
 import io.github.mzmine.javafx.components.factories.TableColumns;
 import io.github.mzmine.javafx.concurrent.threading.FxThread;
 import io.github.mzmine.main.MZmineCore;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreScoringUtils;
 import io.github.mzmine.util.ExitCode;
 import io.github.mzmine.util.FeatureUtils;
 import io.github.mzmine.util.spectraldb.entry.SpectralDBAnnotation;
@@ -46,6 +48,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -54,6 +57,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
@@ -82,6 +86,7 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
   private final Font headerFont = new Font("Dialog Bold", 16);
   private final ObservableList<SpectralDBAnnotation> totalMatches = FXCollections.observableList(Collections.synchronizedList(new ArrayList<>()));
   private final ObservableList<SpectralDBAnnotation> visibleMatches = FXCollections.observableArrayList();
+  private final List<SpectralDBAnnotation> allMatches = Collections.synchronizedList(new ArrayList<>());
 
   private final Map<SpectralDBAnnotation, SpectralMatchPanelFX> matchPanels;
   private final VBox mainBox;
@@ -93,11 +98,31 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
   private int showBestN = 15;
   private Label shownMatchesLbl;
   private TableColumn<SpectralDBAnnotation, SpectralDBAnnotation> column;
+  private CheckBox cbFilterSpectral;
+  private CheckBox cbFilterMs2;
+  private ComboBox<SortMode> sortBox;
+  private SortMode sortMode = SortMode.RESCORED;
 
   public enum MatchSource { SPECTRAL_LIBRARY, MS2DEEPSCORE }
 
   private final MatchSource matchSource;
   private final boolean freezeSelection;
+
+  private enum SortMode {
+    ANN("Original score"),
+    RESCORED("Rescored heuristic");
+
+    private final String label;
+
+    SortMode(String label) {
+      this.label = label;
+    }
+
+    @Override
+    public String toString() {
+      return label;
+    }
+  }
 
   public SpectraIdentificationResultsPane(final ParentFeatureListPaneGroup parentGroup) {
     this(parentGroup, MatchSource.SPECTRAL_LIBRARY, false);
@@ -159,8 +184,12 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
       case MS2DEEPSCORE -> selectedRows.stream()
           .flatMap(row -> {
             final var ms2 = row.get(MS2DeepscoreMatchesType.class);
-            return (ms2 == null ? java.util.stream.Stream.<SpectralDBAnnotation>empty()
-                : ms2.stream());
+            final var analog = row.get(MS2DeepscoreAnalogMatchesType.class);
+            Stream<SpectralDBAnnotation> directStream =
+                ms2 == null ? Stream.empty() : ms2.stream();
+            Stream<SpectralDBAnnotation> analogStream =
+                analog == null ? Stream.empty() : analog.stream();
+            return Stream.concat(directStream, analogStream);
           }).toList();
     };
     setMatches(allMatches);
@@ -174,8 +203,12 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
       case MS2DEEPSCORE -> rows.stream()
           .flatMap(row -> {
             final var ms2 = row.get(MS2DeepscoreMatchesType.class);
-            return (ms2 == null ? java.util.stream.Stream.<SpectralDBAnnotation>empty()
-                : ms2.stream());
+            final var analog = row.get(MS2DeepscoreAnalogMatchesType.class);
+            Stream<SpectralDBAnnotation> directStream =
+                ms2 == null ? Stream.empty() : ms2.stream();
+            Stream<SpectralDBAnnotation> analogStream =
+                analog == null ? Stream.empty() : analog.stream();
+            return Stream.concat(directStream, analogStream);
           }).toList();
     };
     setMatches(allMatches);
@@ -215,9 +248,29 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
       }
     });
 
+    cbFilterSpectral = new CheckBox("Spectral library");
+    cbFilterSpectral.setSelected(true);
+    cbFilterSpectral.selectedProperty().addListener((obs, old, val) -> applyFilters());
+    cbFilterSpectral.setDisable(matchSource == MatchSource.MS2DEEPSCORE);
+
+    cbFilterMs2 = new CheckBox("MS2Deepscore");
+    cbFilterMs2.setSelected(true);
+    cbFilterMs2.selectedProperty().addListener((obs, old, val) -> applyFilters());
+    cbFilterMs2.setDisable(matchSource == MatchSource.SPECTRAL_LIBRARY);
+
+    sortBox = new ComboBox<>(FXCollections.observableArrayList(SortMode.values()));
+    sortBox.getSelectionModel().select(sortMode);
+    sortBox.valueProperty().addListener((obs, old, val) -> {
+      if (val != null) {
+        sortMode = val;
+        sortTotalMatches();
+      }
+    });
+
     shownMatchesLbl = new Label("");
 
-    var hBox = new HBox(btnSetup, cbCoupleZoomY, prev, showN, next, shownMatchesLbl);
+    var hBox = new HBox(btnSetup, cbCoupleZoomY, prev, showN, next, cbFilterSpectral,
+        cbFilterMs2, new Label("Sort:"), sortBox, shownMatchesLbl);
     hBox.setAlignment(Pos.CENTER_LEFT);
     hBox.setSpacing(5);
     return hBox;
@@ -292,12 +345,9 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
    * @param match single match
    */
   public synchronized void addMatches(SpectralDBAnnotation match) {
-    if (!totalMatches.contains(match)) {
-      // add
-      totalMatches.add(match);
-
-      // sort and show
-      sortTotalMatches();
+    if (!allMatches.contains(match)) {
+      allMatches.add(match);
+      applyFilters();
     }
   }
 
@@ -310,9 +360,8 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
     if (matches.isEmpty()) {
       return;
     }
-    totalMatches.addAll(matches);
-    // sort and show
-    sortTotalMatches();
+    allMatches.addAll(matches);
+    applyFilters();
   }
 
   /**
@@ -326,10 +375,46 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
         .filter(m -> m != null && m.getEntry() != null && m.getEntry().getDataPoints() != null
             && m.getEntry().getDataPoints().length > 0)
         .toList();
-    totalMatches.setAll(usable);
+    allMatches.clear();
+    allMatches.addAll(usable);
     matchPanels.clear();
-    // sort and show
+    applyFilters();
+  }
+
+
+  private void applyFilters() {
+    synchronized (totalMatches) {
+      totalMatches.clear();
+      for (SpectralDBAnnotation match : allMatches) {
+        if (isMs2Match(match)) {
+          if (cbFilterMs2 != null && !cbFilterMs2.isSelected()) {
+            continue;
+          }
+        } else {
+          if (cbFilterSpectral != null && !cbFilterSpectral.isSelected()) {
+            continue;
+          }
+        }
+        totalMatches.add(match);
+      }
+    }
     sortTotalMatches();
+  }
+
+  private boolean isMs2Match(SpectralDBAnnotation match) {
+    var sim = match.getSimilarity();
+    String fn = sim != null ? sim.getFunctionName() : null;
+    return fn != null && fn.startsWith("MS2Deepscore");
+  }
+
+  private double scoreForSort(SpectralDBAnnotation annotation) {
+    return switch (sortMode) {
+      case RESCORED -> MS2DeepscoreScoringUtils.computeRescore(annotation);
+      case ANN -> {
+        var sim = annotation.getSimilarity();
+        yield sim != null ? sim.getScore() : 0d;
+      }
+    };
   }
 
 
@@ -348,9 +433,10 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
     // reversed sorting (highest cosine first
     synchronized (totalMatches) {
       totalMatches.sort((SpectralDBAnnotation a, SpectralDBAnnotation b) -> Double.compare(
-          b.getSimilarity().getScore(), a.getSimilarity().getScore()));
+          scoreForSort(b), scoreForSort(a)));
     }
     // renew layout and show
+    matchPanels.clear();
     renewLayout();
   }
 

@@ -42,6 +42,7 @@ import io.github.mzmine.modules.visualization.featurelisttable_modular.FeatureTa
 import io.github.mzmine.modules.visualization.molstructure.MolStructureViewer;
 import io.github.mzmine.modules.visualization.molstructure.StructureTableCell;
 import io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectralIdentificationResultsTab;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreAnalogMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import java.util.List;
 import java.util.logging.Logger;
@@ -122,7 +123,8 @@ public class MolecularStructureType extends DataType<MolecularStructure> impleme
       } else if (superType instanceof SpectralLibraryMatchesType) {
         MZmineCore.getDesktop().addTab(new SpectralIdentificationResultsTab(table,
             io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectraIdentificationResultsPane.MatchSource.SPECTRAL_LIBRARY));
-      } else if (superType instanceof MS2DeepscoreMatchesType) {
+      } else if (superType instanceof MS2DeepscoreMatchesType
+          || superType instanceof MS2DeepscoreAnalogMatchesType) {
         MZmineCore.getDesktop().addTab(new SpectralIdentificationResultsTab(table,
             io.github.mzmine.modules.visualization.spectra.spectralmatchresults.SpectraIdentificationResultsPane.MatchSource.MS2DEEPSCORE));
       } else {

@@ -25,8 +25,6 @@
 
 package io.github.mzmine.parameters.parametertypes.filenames;
 
-import static java.util.Objects.requireNonNullElse;
-
 import com.google.common.collect.ImmutableList;
 import io.github.mzmine.datamodel.MZmineProject;
 import io.github.mzmine.modules.io.projectsave.RawDataFileSaveHandler;
@@ -34,10 +32,14 @@ import io.github.mzmine.parameters.Parameter;
 import io.github.mzmine.parameters.UserParameter;
 import io.github.mzmine.project.ProjectService;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javafx.scene.layout.Priority;
@@ -133,12 +135,12 @@ public class FileNamesParameter implements UserParameter<File[], FileNamesCompon
   @Override
   @NotNull
   public File[] getValue() {
-    return value;
+    return value.clone();
   }
 
   @Override
   public void setValue(@Nullable File[] value) {
-    this.value = requireNonNullElse(value, new File[0]);
+    this.value = sanitizeFiles(value);
   }
 
   @Override
@@ -151,7 +153,7 @@ public class FileNamesParameter implements UserParameter<File[], FileNamesCompon
 
   @Override
   public void setValueFromComponent(FileNamesComponent component) {
-    this.value = component.getValue();
+    setValue(component.getValue());
   }
 
   @Override
@@ -178,7 +180,7 @@ public class FileNamesParameter implements UserParameter<File[], FileNamesCompon
         newFiles[i] = absFile;
       }
     }
-    this.value = newFiles;
+    setValue(newFiles);
   }
 
   @Override
@@ -232,5 +234,29 @@ public class FileNamesParameter implements UserParameter<File[], FileNamesCompon
 
   public int numFiles() {
     return value != null ? value.length : 0;
+  }
+
+  private static File[] sanitizeFiles(@Nullable File[] files) {
+    if (files == null || files.length == 0) {
+      return new File[0];
+    }
+
+    Map<String, File> unique = new LinkedHashMap<>();
+    for (File file : files) {
+      if (file == null) {
+        continue;
+      }
+      unique.putIfAbsent(resolveKey(file), file);
+    }
+    return unique.values().stream().filter(Objects::nonNull).map(File::getAbsoluteFile)
+        .toArray(File[]::new);
+  }
+
+  private static String resolveKey(File file) {
+    try {
+      return file.getCanonicalPath();
+    } catch (IOException e) {
+      return file.getAbsolutePath();
+    }
   }
 }

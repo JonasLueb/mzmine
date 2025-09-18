@@ -42,10 +42,13 @@ import io.github.mzmine.util.MemoryMapStorage;
 import io.github.mzmine.util.scans.FragmentScanSelection;
 import io.github.mzmine.util.scans.ScanUtils;
 import io.github.mzmine.util.scans.similarity.SpectralSimilarity;
+import io.github.mzmine.util.scans.ScanAlignment;
 import io.github.mzmine.util.scans.similarity.impl.ms2deepscore.MS2DeepscoreModel;
 import io.github.mzmine.datamodel.MassSpectrum;
 import io.github.mzmine.datamodel.features.types.DataTypes;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreAnalogMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreVectorSearchParameters.SearchMode;
 import io.github.mzmine.util.spectraldb.entry.DBEntryField;
 import io.github.mzmine.util.spectraldb.entry.SpectralDBAnnotation;
 import io.github.mzmine.util.spectraldb.entry.SpectralLibraryEntry;
@@ -57,8 +60,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -88,6 +93,8 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
   private final MZTolerance precursorTol;
   // keep parameter for future optional cosine confirmation refinement
   private final boolean confirmWithCosine;
+  private final boolean useSeparateColumns;
+  private final SearchMode searchMode;
   private int processedItems;
 
   public MS2DeepscoreVectorSearchTask(MZmineProject project, @NotNull FeatureList[] featureLists,
@@ -106,11 +113,22 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
     this.minScore = parameters.getValue(MS2DeepscoreVectorSearchParameters.MIN_SCORE);
     this.precursorTol = parameters.getValue(MS2DeepscoreVectorSearchParameters.PRECURSOR_TOL);
     this.confirmWithCosine = parameters.getValue(MS2DeepscoreVectorSearchParameters.CONFIRM_WITH_COSINE);
+    this.useSeparateColumns = parameters.getValue(
+        MS2DeepscoreVectorSearchParameters.USE_SEPARATE_COLUMNS);
+    this.searchMode = parameters.getValue(MS2DeepscoreVectorSearchParameters.SEARCH_MODE);
     totalItems = 0;
     processedItems = 0;
     for (FeatureList fl : featureLists) {
-      // ensure separate MS2Deepscore column group is visible in the table
-      fl.addRowType(DataTypes.get(MS2DeepscoreMatchesType.class));
+      if (useSeparateColumns) {
+        // ensure separate MS2Deepscore column group is visible in the table
+        fl.addRowType(DataTypes.get(MS2DeepscoreMatchesType.class));
+      } else {
+        // Harmonized view: reuse SpectralLibraryMatchesType columns
+        fl.addRowType(DataTypes.get(io.github.mzmine.datamodel.features.types.annotations.SpectralLibraryMatchesType.class));
+      }
+      if (searchMode != SearchMode.DIRECT_ONLY) {
+        fl.addRowType(DataTypes.get(MS2DeepscoreAnalogMatchesType.class));
+      }
       totalItems += fl.getNumberOfRows();
     }
   }
@@ -135,6 +153,10 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
 
   private void processFeatureList(FeatureList featureList, MS2DeepscoreModel model,
       VectorDbClient client) {
+    // Prepare alignment tolerance (used only for metrics; ANN score remains the similarity score)
+    final MZTolerance mzTolSpectral = parameters.getValue(MS2DeepscoreVectorSearchParameters.SPECTRAL_TOL);
+    final boolean directEnabled = searchMode != SearchMode.ANALOG_ONLY;
+    final boolean analogEnabled = searchMode != SearchMode.DIRECT_ONLY;
     // Build an index of imported spectral libraries by DB# for enrichment
     final Map<String, SpectralLibraryEntry> libIndexByDbId = buildLibraryIndex();
     for (FeatureListRow row : featureList.getRows()) {
@@ -167,44 +189,70 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
           filters.put("precursor_mz_between", new double[]{lo, hi});
         }
 
-        // Query ANN
-        List<VectorDbHit> hits;
-        if (queryBoth) {
-          List<VectorDbHit> posHits = client.query(collectionPos, embedding, topK, minScore, filters);
-          List<VectorDbHit> negHits = client.query(collectionNeg, embedding, topK, minScore, filters);
-          hits = new ArrayList<>(posHits.size() + negHits.size());
-          hits.addAll(posHits);
-          hits.addAll(negHits);
-          hits.sort((a,b) -> Double.compare(b.score(), a.score()));
-          if (hits.size() > topK) {
-            hits = hits.subList(0, topK);
-          }
-        } else {
-          final String collection = (pol == PolarityType.NEGATIVE) ? collectionNeg : collectionPos;
-          hits = client.query(collection, embedding, topK, minScore, filters);
+        List<VectorDbHit> directHits = List.of();
+        List<SpectralDBAnnotation> directAnnotations = List.of();
+        if (directEnabled) {
+          directHits = queryHits(client, embedding, queryBoth, pol, filters);
+          directAnnotations = buildAnnotations(directHits, libIndexByDbId, scan, row, mzTolSpectral,
+              "MS2DeepscoreANN", false);
         }
-        if (hits.isEmpty()) {
+
+        List<SpectralDBAnnotation> analogAnnotations = List.of();
+        if (analogEnabled) {
+          List<VectorDbHit> analogHits = queryHits(client, embedding, queryBoth, pol, null);
+          if (directEnabled && !directHits.isEmpty()) {
+            Set<String> directIds = new HashSet<>();
+            for (VectorDbHit hit : directHits) {
+              final String id = extractDbId(hit);
+              if (id != null && !id.isBlank()) {
+                directIds.add(id);
+              }
+            }
+            if (!directIds.isEmpty()) {
+              analogHits.removeIf(hit -> {
+                final String id = extractDbId(hit);
+                return id != null && !id.isBlank() && directIds.contains(id);
+              });
+            }
+          }
+          if (!analogHits.isEmpty()) {
+            analogAnnotations = buildAnnotations(analogHits, libIndexByDbId, scan, row,
+                mzTolSpectral, "MS2DeepscoreANN (analog)", true);
+          }
+        }
+
+        if ((directAnnotations == null || directAnnotations.isEmpty())
+            && (analogAnnotations == null || analogAnnotations.isEmpty())) {
           processedItems++;
           continue;
         }
 
-        // Convert hits to SpectralDBAnnotation
-        List<SpectralDBAnnotation> annotations = new ArrayList<>(hits.size());
-        for (VectorDbHit hit : hits) {
-          SpectralLibraryEntry entry = hitToEntry(hit, libIndexByDbId);
-          SpectralSimilarity sim = new SpectralSimilarity("MS2DeepscoreANN", hit.score(), 0,
-              0d);
-          SpectralDBAnnotation ann = new SpectralDBAnnotation(entry, sim, scan, null,
-              scan.getPrecursorMz(), row.getAverageRT());
-          annotations.add(ann);
+        // Attach direct hits either to MS2Deepscore group or the Spectral library matches group
+        if (directEnabled && directAnnotations != null && !directAnnotations.isEmpty()) {
+          if (useSeparateColumns) {
+            var existing = row.get(MS2DeepscoreMatchesType.class);
+            List<SpectralDBAnnotation> ms2ds =
+                existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+            ms2ds.addAll(directAnnotations);
+            row.set(MS2DeepscoreMatchesType.class, ms2ds);
+          } else {
+            var existing = row.get(
+                io.github.mzmine.datamodel.features.types.annotations.SpectralLibraryMatchesType.class);
+            List<SpectralDBAnnotation> sl = existing == null ? new ArrayList<>()
+                : new ArrayList<>(existing);
+            sl.addAll(directAnnotations);
+            row.set(io.github.mzmine.datamodel.features.types.annotations.SpectralLibraryMatchesType.class,
+                sl);
+          }
         }
 
-        // Attach to row under MS2Deepscore-specific column group for side-by-side comparison
-        // with classical spectral search results.
-        var existing = row.get(MS2DeepscoreMatchesType.class);
-        List<SpectralDBAnnotation> ms2ds = existing == null ? new ArrayList<>() : new ArrayList<>(existing);
-        ms2ds.addAll(annotations);
-        row.set(MS2DeepscoreMatchesType.class, ms2ds);
+        if (analogEnabled && analogAnnotations != null && !analogAnnotations.isEmpty()) {
+          var existingAnalog = row.get(MS2DeepscoreAnalogMatchesType.class);
+          List<SpectralDBAnnotation> analogList =
+              existingAnalog == null ? new ArrayList<>() : new ArrayList<>(existingAnalog);
+          analogList.addAll(analogAnnotations);
+          row.set(MS2DeepscoreAnalogMatchesType.class, analogList);
+        }
       } catch (TranslateException e) {
         // Likely due to missing precursor m/z after internal filtering; ignore this row
         logger.log(Level.FINE, "Embedding skipped for row " + row.getID() + ": " + e.getMessage());
@@ -214,6 +262,62 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
         processedItems++;
       }
     }
+  }
+
+  private List<VectorDbHit> queryHits(VectorDbClient client, float[] embedding,
+      boolean queryBoth, @Nullable PolarityType pol, @Nullable Map<String, Object> filters)
+      throws IOException {
+    if (queryBoth) {
+      List<VectorDbHit> posHits = client.query(collectionPos, embedding, topK, minScore, filters);
+      List<VectorDbHit> negHits = client.query(collectionNeg, embedding, topK, minScore, filters);
+      List<VectorDbHit> hits = new ArrayList<>(posHits.size() + negHits.size());
+      hits.addAll(posHits);
+      hits.addAll(negHits);
+      hits.sort((a, b) -> Double.compare(b.score(), a.score()));
+      if (hits.size() > topK) {
+        return new ArrayList<>(hits.subList(0, topK));
+      }
+      return hits;
+    } else {
+      final String collection = (pol == PolarityType.NEGATIVE) ? collectionNeg : collectionPos;
+      return new ArrayList<>(client.query(collection, embedding, topK, minScore, filters));
+    }
+  }
+
+  private List<SpectralDBAnnotation> buildAnnotations(List<VectorDbHit> hits,
+      Map<String, SpectralLibraryEntry> libIndexByDbId, Scan scan, FeatureListRow row,
+      MZTolerance mzTolSpectral, String similarityLabel, boolean analog) {
+    if (hits == null || hits.isEmpty()) {
+      return List.of();
+    }
+
+    List<SpectralDBAnnotation> annotations = new ArrayList<>(hits.size());
+    final Float testedRt = row.getAverageRT();
+    for (VectorDbHit hit : hits) {
+      SpectralLibraryEntry entry = hitToEntry(hit, libIndexByDbId);
+
+      SpectralSimilarity sim;
+      try {
+        final io.github.mzmine.datamodel.DataPoint[] lib = entry.getDataPoints();
+        final io.github.mzmine.datamodel.DataPoint[] query = ScanUtils.extractDataPoints(scan, true);
+        if (lib != null && lib.length > 0 && query != null && query.length > 0) {
+          java.util.List<io.github.mzmine.datamodel.DataPoint[]> aligned =
+              ScanAlignment.align(mzTolSpectral, lib, query);
+          int overlap = (int) aligned.stream().filter(dp -> dp[0] != null && dp[1] != null).count();
+          sim = new SpectralSimilarity(similarityLabel, hit.score(), overlap, lib, query, aligned);
+        } else {
+          sim = new SpectralSimilarity(similarityLabel, hit.score(), 0, lib, query, null);
+        }
+      } catch (Exception __) {
+        sim = new SpectralSimilarity(similarityLabel, hit.score(), 0, 0d);
+      }
+
+      Double testedPrecursor = analog ? null : scan.getPrecursorMz();
+      SpectralDBAnnotation ann = new SpectralDBAnnotation(entry, sim, scan, null, testedPrecursor,
+          testedRt);
+      annotations.add(ann);
+    }
+    return annotations;
   }
 
   private @Nullable Scan pickOneScan(@NotNull FeatureListRow row) {
@@ -404,5 +508,3 @@ public class MS2DeepscoreVectorSearchTask extends AbstractFeatureListTask {
     }
   }
 }
-
-

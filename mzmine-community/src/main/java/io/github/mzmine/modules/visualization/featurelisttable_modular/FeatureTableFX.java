@@ -48,6 +48,8 @@ import io.github.mzmine.datamodel.features.types.annotations.CompoundDatabaseMat
 import io.github.mzmine.datamodel.features.types.annotations.RdbeType;
 import io.github.mzmine.datamodel.features.types.annotations.SmilesStructureType;
 import io.github.mzmine.datamodel.features.types.annotations.SpectralLibraryMatchesType;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreRescoreType;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreAnalogMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import io.github.mzmine.datamodel.features.types.annotations.formula.ConsensusFormulaListType;
 import io.github.mzmine.datamodel.features.types.annotations.formula.FormulaMassType;
@@ -467,7 +469,11 @@ public class FeatureTableFX extends BorderPane implements ListChangeListener<Fea
     setVisible(ColumnType.ROW_TYPE, parentType, PrecursorMZType.class, toggledState);
     setVisible(ColumnType.ROW_TYPE, parentType, NeutralMassType.class, toggledState);
     setVisible(ColumnType.ROW_TYPE, parentType, SimilarityType.class, toggledState);
+    setVisible(ColumnType.ROW_TYPE, parentType, MS2DeepscoreRescoreType.class, toggledState);
     setVisible(ColumnType.ROW_TYPE, parentType, MatchingSignalsType.class, toggledState);
+    setVisible(ColumnType.ROW_TYPE, parentType,
+        io.github.mzmine.datamodel.features.types.numbers.scores.ExplainedIntensityPercentType.class,
+        toggledState);
 
     // csv compound database
 
@@ -479,26 +485,57 @@ public class FeatureTableFX extends BorderPane implements ListChangeListener<Fea
 
   private Boolean toggleMs2DeepscoreAnnotations(boolean applyVisibility) {
     final var columnEntry = getMainColumnEntry(MS2DeepscoreMatchesType.class);
-    if (columnEntry == null) {
+    final var analogEntry = getMainColumnEntry(MS2DeepscoreAnalogMatchesType.class);
+
+    if (columnEntry == null && analogEntry == null) {
       return null;
     }
 
-    final ColumnID mainColumn = columnEntry.getValue();
-    final boolean toggledState = !rowTypesParameter.isDataTypeVisible(mainColumn);
-    // first all invisible
-    setColumnVisibilityAndSubColumns(mainColumn, false, false);
+    boolean toggledState;
 
-    rowTypesParameter.setDataTypeVisible(mainColumn, toggledState);
-    final var parentType = (Class<? extends DataType<?>>) mainColumn.getDataType().getClass();
+    if (columnEntry != null) {
+      final ColumnID mainColumn = columnEntry.getValue();
+      toggledState = !rowTypesParameter.isDataTypeVisible(mainColumn);
+      // first all invisible
+      setColumnVisibilityAndSubColumns(mainColumn, false, false);
 
-    // basic
-    setVisible(ColumnType.ROW_TYPE, parentType, MS2DeepscoreMatchesType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, IonAdductType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, FormulaType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, SmilesStructureType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, PrecursorMZType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, NeutralMassType.class, toggledState);
-    setVisible(ColumnType.ROW_TYPE, parentType, SimilarityType.class, toggledState);
+      rowTypesParameter.setDataTypeVisible(mainColumn, toggledState);
+      final var parentType = (Class<? extends DataType<?>>) mainColumn.getDataType().getClass();
+
+      // basic direct-hit columns
+      setVisible(ColumnType.ROW_TYPE, parentType, MS2DeepscoreMatchesType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, IonAdductType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, FormulaType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, SmilesStructureType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, PrecursorMZType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, NeutralMassType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, SimilarityType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, parentType, MatchingSignalsType.class, toggledState);
+    } else {
+      // analog-only mode: derive toggled state from analog column
+      final ColumnID analogMainColumn = analogEntry.getValue();
+      toggledState = !rowTypesParameter.isDataTypeVisible(analogMainColumn);
+    }
+
+    if (analogEntry != null) {
+      final ColumnID analogMainColumn = analogEntry.getValue();
+      setColumnVisibilityAndSubColumns(analogMainColumn, false, false);
+      rowTypesParameter.setDataTypeVisible(analogMainColumn, toggledState);
+      final var analogParentType =
+          (Class<? extends DataType<?>>) analogMainColumn.getDataType().getClass();
+
+      setVisible(ColumnType.ROW_TYPE, analogParentType, MS2DeepscoreAnalogMatchesType.class,
+          toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, IonAdductType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, FormulaType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, SmilesStructureType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, PrecursorMZType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, NeutralMassType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, SimilarityType.class, toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, MS2DeepscoreRescoreType.class,
+          toggledState);
+      setVisible(ColumnType.ROW_TYPE, analogParentType, MatchingSignalsType.class, toggledState);
+    }
 
     if (applyVisibility) {
       applyVisibilityParametersToAllColumns();

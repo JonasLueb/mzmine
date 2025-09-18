@@ -40,6 +40,7 @@ import io.github.mzmine.javafx.util.FxColorUtil;
 import io.github.mzmine.javafx.util.FxIconUtil;
 import io.github.mzmine.javafx.util.color.ColorScaleUtil;
 import io.github.mzmine.main.MZmineCore;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreScoringUtils;
 import io.github.mzmine.modules.visualization.molstructure.Structure2DComponent;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.parametertypes.filenames.FileNameParameter;
@@ -205,6 +206,7 @@ public class SpectralMatchPanelFX extends GridPane {
     String styleWhiteScoreSmall = "white-score-label-small";
     // create Top panel
     double simScore = hit.getSimilarity().getScore();
+    double rescoredScore = MS2DeepscoreScoringUtils.computeRescore(hit);
     Color gradientCol = FxColorUtil.awtColorToFX(
         ColorScaleUtil.getColor(FxColorUtil.fxColorToAWT(MIN_COS_COLOR),
             FxColorUtil.fxColorToAWT(MAX_COS_COLOR), MIN_COS_COLOR_VALUE, MAX_COS_COLOR_VALUE,
@@ -216,6 +218,8 @@ public class SpectralMatchPanelFX extends GridPane {
         "Cosine similarity of raw data scan (top, blue) and database scan: " + COS_FORM.format(
             simScore);
     lblScore = createLabel(COS_FORM.format(simScore), simScoreTooltip, "white-score-label");
+    final Label lblRescored = createLabel(COS_FORM.format(rescoredScore),
+        "Heuristic rescored MS2Deepscore", "white-score-label-small");
 
     var totalSignals = hit.getLibraryDataPoints(DataPointsTag.FILTERED).length;
     var overlap = hit.getSimilarity().getOverlap();
@@ -228,15 +232,23 @@ public class SpectralMatchPanelFX extends GridPane {
 
     lblExplained.getStyleClass().add(styleWhiteScoreSmall);
 
+    final Label lblMethod = createLabel(formatSimilarityMethod(hit.getSimilarity().getFunctionName()),
+        "white-score-label-small");
+    lblMethod.getStyleClass().add(styleWhiteScoreSmall);
+
     var leftScores = new VBox(0, lblMatched, lblExplained);
     leftScores.setAlignment(Pos.CENTER);
 
     var scoreDef = new VBox(0,
+        createLabel("Method:", null, styleWhiteScoreSmall),
         createLabel("Matched signals:", matchedSignalsTooltip, styleWhiteScoreSmall),
         createLabel("Expl. intensity:", explIntTooltip, styleWhiteScoreSmall));
     scoreDef.setAlignment(Pos.CENTER_RIGHT);
 
-    var scoreBox = new HBox(5, scoreDef, leftScores, lblScore);
+    var leftMetrics = new VBox(4, lblMethod, leftScores);
+    leftMetrics.setAlignment(Pos.CENTER);
+
+    var scoreBox = new HBox(5, scoreDef, leftMetrics, lblRescored, lblScore);
     scoreBox.setPadding(new Insets(0, 5, 0, 10));
     scoreBox.setAlignment(Pos.CENTER);
 
@@ -361,10 +373,31 @@ public class SpectralMatchPanelFX extends GridPane {
 
   private @NotNull HBox getSpectrumInfo() {
     final String spectrumSource = ScanUtils.extractScanIdString(hit.getQueryScan(), true);
-    final TextFlow text = FxTextFlows.newTextFlow(text("Matched spectra: "), text(spectrumSource));
-    text.setOnMouseClicked(_ -> copyTextToClipboard(spectrumSource));
-    final HBox spectrumInfo = FxLayout.newHBox(Pos.TOP_LEFT, text);
+    final TextFlow sourceFlow = FxTextFlows.newTextFlow(text("Matched spectra: "),
+        text(spectrumSource));
+    sourceFlow.setOnMouseClicked(_ -> copyTextToClipboard(spectrumSource));
+
+    final String method = formatSimilarityMethod(hit.getSimilarity().getFunctionName());
+    final TextFlow methodFlow = FxTextFlows.newTextFlow(text("Method: "), text(method));
+    methodFlow.setOnMouseClicked(_ -> copyTextToClipboard(method));
+
+    final Label separator = new Label(" • ");
+    separator.getStyleClass().add("muted-label");
+
+    final HBox spectrumInfo = FxLayout.newHBox(Pos.TOP_LEFT, sourceFlow, separator, methodFlow);
+    spectrumInfo.setSpacing(6);
     return spectrumInfo;
+  }
+
+  private String formatSimilarityMethod(String functionName) {
+    if (functionName == null || functionName.isBlank()) {
+      return "Unknown";
+    }
+    return switch (functionName) {
+      case "MS2DeepscoreANN" -> "MS2Deepscore (direct)";
+      case "MS2DeepscoreANN (analog)" -> "MS2Deepscore (analog)";
+      default -> functionName;
+    };
   }
 
   private BorderPane extractLibraryPanel(SpectralLibraryEntry entry) {
@@ -618,10 +651,6 @@ public class SpectralMatchPanelFX extends GridPane {
   }
 
 }
-
-
-
-
 
 
 

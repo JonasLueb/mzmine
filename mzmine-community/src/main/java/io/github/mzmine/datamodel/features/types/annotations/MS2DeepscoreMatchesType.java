@@ -28,11 +28,19 @@ package io.github.mzmine.datamodel.features.types.annotations;
 import io.github.mzmine.datamodel.features.types.DataType;
 import io.github.mzmine.datamodel.features.types.JsonStringType;
 import io.github.mzmine.datamodel.features.types.ListWithSubsType;
+import io.github.mzmine.datamodel.features.types.annotations.CompoundNameType;
+import io.github.mzmine.datamodel.features.types.annotations.InChIStructureType;
+import io.github.mzmine.datamodel.features.types.annotations.MolecularStructureType;
+import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreRescoreType;
+import io.github.mzmine.datamodel.features.types.annotations.SmilesStructureType;
 import io.github.mzmine.datamodel.features.types.annotations.formula.FormulaType;
 import io.github.mzmine.datamodel.features.types.annotations.iin.IonAdductType;
 import io.github.mzmine.datamodel.features.types.modifiers.AnnotationType;
 import io.github.mzmine.datamodel.features.types.numbers.PrecursorMZType;
+import io.github.mzmine.datamodel.features.types.numbers.MatchingSignalsType;
+import io.github.mzmine.datamodel.features.types.numbers.scores.ExplainedIntensityPercentType;
 import io.github.mzmine.datamodel.features.types.numbers.scores.SimilarityType;
+import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2DeepscoreScoringUtils;
 import io.github.mzmine.util.spectraldb.entry.DBEntryField;
 import io.github.mzmine.util.spectraldb.entry.SpectralDBAnnotation;
 import io.github.mzmine.util.spectraldb.entry.SpectralLibraryEntry;
@@ -51,6 +59,9 @@ public class MS2DeepscoreMatchesType extends ListWithSubsType<SpectralDBAnnotati
       new MS2DeepscoreMatchesType(),
       new CompoundNameType(),
       new SimilarityType(),
+      new MS2DeepscoreRescoreType(),
+      new MatchingSignalsType(),
+      new ExplainedIntensityPercentType(),
       new IonAdductType(),
       new FormulaType(),
       new MolecularStructureType(),
@@ -89,6 +100,9 @@ public class MS2DeepscoreMatchesType extends ListWithSubsType<SpectralDBAnnotati
       case SmilesStructureType __ -> entry.getField(DBEntryField.SMILES).orElse("").toString();
       case InChIStructureType __ -> entry.getField(DBEntryField.INCHI).orElse("").toString();
       case SimilarityType __ -> (float) match.getSimilarity().getScore();
+      case MS2DeepscoreRescoreType __ -> (float) MS2DeepscoreScoringUtils.computeRescore(match);
+      case MatchingSignalsType __ -> match.getSimilarity().getOverlap();
+      case ExplainedIntensityPercentType __ -> match.getSimilarity().getExplainedLibraryIntensity();
       case PrecursorMZType __ -> entry.getField(DBEntryField.PRECURSOR_MZ).orElse(null);
       case JsonStringType __ -> entry.getOrElse(DBEntryField.JSON_STRING, null);
       default -> throw new UnsupportedOperationException(
@@ -112,5 +126,3 @@ public class MS2DeepscoreMatchesType extends ListWithSubsType<SpectralDBAnnotati
     return 150;
   }
 }
-
-
