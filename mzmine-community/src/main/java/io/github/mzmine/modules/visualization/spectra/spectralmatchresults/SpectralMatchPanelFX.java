@@ -135,11 +135,17 @@ public class SpectralMatchPanelFX extends GridPane {
   private GridPane pnExport;
   private Label lblScore;
   private Label lblHit;
+  private final boolean primaryRescored;
 
   public SpectralMatchPanelFX(SpectralDBAnnotation hit) {
+    this(hit, false);
+  }
+
+  public SpectralMatchPanelFX(SpectralDBAnnotation hit, boolean primaryRescored) {
     super();
 
     this.hit = hit;
+    this.primaryRescored = primaryRescored;
 
     setMinSize(750, 200);
 
@@ -207,6 +213,7 @@ public class SpectralMatchPanelFX extends GridPane {
     // create Top panel
     double simScore = hit.getSimilarity().getScore();
     double rescoredScore = MS2DeepscoreScoringUtils.computeRescore(hit);
+    final boolean showRescoredPrimary = primaryRescored;
     Color gradientCol = FxColorUtil.awtColorToFX(
         ColorScaleUtil.getColor(FxColorUtil.fxColorToAWT(MIN_COS_COLOR),
             FxColorUtil.fxColorToAWT(MAX_COS_COLOR), MIN_COS_COLOR_VALUE, MAX_COS_COLOR_VALUE,
@@ -214,12 +221,16 @@ public class SpectralMatchPanelFX extends GridPane {
 
     lblHit = createLabel(hit.getCompoundName(), "white-larger-label");
 
-    String simScoreTooltip =
-        "Cosine similarity of raw data scan (top, blue) and database scan: " + COS_FORM.format(
-            simScore);
-    lblScore = createLabel(COS_FORM.format(simScore), simScoreTooltip, "white-score-label");
-    final Label lblRescored = createLabel(COS_FORM.format(rescoredScore),
-        "Heuristic rescored MS2Deepscore", "white-score-label-small");
+    double primaryScore = showRescoredPrimary ? rescoredScore : simScore;
+    double secondaryScore = showRescoredPrimary ? simScore : rescoredScore;
+    String primaryLabelText = showRescoredPrimary ? "Rescored similarity" : "Cosine similarity";
+    String secondaryLabelText = showRescoredPrimary ? "Cosine similarity" : "Rescored similarity";
+
+    lblScore = createLabel(COS_FORM.format(primaryScore),
+        primaryLabelText + ": " + COS_FORM.format(primaryScore), "white-score-label");
+    Label lblSecondaryScore = createLabel(COS_FORM.format(secondaryScore),
+        secondaryLabelText + ": " + COS_FORM.format(secondaryScore), "white-score-label-small");
+    Label lblSecondaryTitle = createLabel(secondaryLabelText, "white-score-label-small");
 
     var totalSignals = hit.getLibraryDataPoints(DataPointsTag.FILTERED).length;
     var overlap = hit.getSimilarity().getOverlap();
@@ -231,24 +242,36 @@ public class SpectralMatchPanelFX extends GridPane {
         styleWhiteScoreSmall);
 
     lblExplained.getStyleClass().add(styleWhiteScoreSmall);
+    lblMatched.setOnMouseClicked(_ -> copyTextToClipboard(lblMatched.getText()));
+    lblExplained.setOnMouseClicked(_ -> copyTextToClipboard(lblExplained.getText()));
 
-    final Label lblMethod = createLabel(formatSimilarityMethod(hit.getSimilarity().getFunctionName()),
-        "white-score-label-small");
-    lblMethod.getStyleClass().add(styleWhiteScoreSmall);
+    Label lblMethodValue = createLabel(formatSimilarityMethod(hit.getSimilarity().getFunctionName()),
+        styleWhiteScoreSmall);
+    lblMethodValue.getStyleClass().add(styleWhiteScoreSmall);
+    lblMethodValue.setOnMouseClicked(_ -> copyTextToClipboard(lblMethodValue.getText()));
 
-    var leftScores = new VBox(0, lblMatched, lblExplained);
-    leftScores.setAlignment(Pos.CENTER);
+    HBox methodRow = new HBox(4, createLabel("Method:", styleWhiteScoreSmall), lblMethodValue);
+    methodRow.setAlignment(Pos.CENTER_LEFT);
 
-    var scoreDef = new VBox(0,
-        createLabel("Method:", null, styleWhiteScoreSmall),
-        createLabel("Matched signals:", matchedSignalsTooltip, styleWhiteScoreSmall),
-        createLabel("Expl. intensity:", explIntTooltip, styleWhiteScoreSmall));
-    scoreDef.setAlignment(Pos.CENTER_RIGHT);
+    HBox matchedRow = new HBox(4,
+        createLabel("Matched signals:", matchedSignalsTooltip, styleWhiteScoreSmall), lblMatched);
+    matchedRow.setAlignment(Pos.CENTER_LEFT);
 
-    var leftMetrics = new VBox(4, lblMethod, leftScores);
-    leftMetrics.setAlignment(Pos.CENTER);
+    HBox explainedRow = new HBox(4,
+        createLabel("Expl. intensity:", explIntTooltip, styleWhiteScoreSmall), lblExplained);
+    explainedRow.setAlignment(Pos.CENTER_LEFT);
 
-    var scoreBox = new HBox(5, scoreDef, leftMetrics, lblRescored, lblScore);
+    VBox supportBox = new VBox(4, methodRow, matchedRow, explainedRow);
+    supportBox.setAlignment(Pos.CENTER_LEFT);
+
+    VBox secondaryBox = new VBox(2, lblSecondaryTitle, lblSecondaryScore);
+    secondaryBox.setAlignment(Pos.CENTER);
+
+    Label primaryTitle = createLabel(primaryLabelText, "white-score-label-small");
+    VBox primaryBox = new VBox(2, primaryTitle, lblScore);
+    primaryBox.setAlignment(Pos.CENTER);
+
+    var scoreBox = new HBox(10, supportBox, secondaryBox, primaryBox);
     scoreBox.setPadding(new Insets(0, 5, 0, 10));
     scoreBox.setAlignment(Pos.CENTER);
 
@@ -651,13 +674,6 @@ public class SpectralMatchPanelFX extends GridPane {
   }
 
 }
-
-
-
-
-
-
-
 
 
 

@@ -27,7 +27,6 @@ package io.github.mzmine.modules.visualization.spectra.spectralmatchresults;
 
 import io.github.mzmine.datamodel.features.FeatureListRow;
 import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreAnalogMatchesType;
-import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import io.github.mzmine.gui.framework.fx.features.AbstractFeatureListRowsPane;
 import io.github.mzmine.gui.framework.fx.features.ParentFeatureListPaneGroup;
 import io.github.mzmine.gui.mainwindow.MZmineTab;
@@ -38,7 +37,6 @@ import io.github.mzmine.modules.dataprocessing.id_ms2deepscore_vectorsearch.MS2D
 import io.github.mzmine.util.ExitCode;
 import io.github.mzmine.util.FeatureUtils;
 import io.github.mzmine.util.spectraldb.entry.SpectralDBAnnotation;
-import io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -183,7 +181,7 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
           .flatMap(row -> row.getSpectralLibraryMatches().stream()).toList();
       case MS2DEEPSCORE -> selectedRows.stream()
           .flatMap(row -> {
-            final var ms2 = row.get(MS2DeepscoreMatchesType.class);
+            final var ms2 = row.get(io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType.class);
             final var analog = row.get(MS2DeepscoreAnalogMatchesType.class);
             Stream<SpectralDBAnnotation> directStream =
                 ms2 == null ? Stream.empty() : ms2.stream();
@@ -202,7 +200,7 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
           .flatMap(row -> row.getSpectralLibraryMatches().stream()).toList();
       case MS2DEEPSCORE -> rows.stream()
           .flatMap(row -> {
-            final var ms2 = row.get(MS2DeepscoreMatchesType.class);
+            final var ms2 = row.get(io.github.mzmine.datamodel.features.types.annotations.MS2DeepscoreMatchesType.class);
             final var analog = row.get(MS2DeepscoreAnalogMatchesType.class);
             Stream<SpectralDBAnnotation> directStream =
                 ms2 == null ? Stream.empty() : ms2.stream();
@@ -251,12 +249,10 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
     cbFilterSpectral = new CheckBox("Spectral library");
     cbFilterSpectral.setSelected(true);
     cbFilterSpectral.selectedProperty().addListener((obs, old, val) -> applyFilters());
-    cbFilterSpectral.setDisable(matchSource == MatchSource.MS2DEEPSCORE);
 
     cbFilterMs2 = new CheckBox("MS2Deepscore");
     cbFilterMs2.setSelected(true);
     cbFilterMs2.selectedProperty().addListener((obs, old, val) -> applyFilters());
-    cbFilterMs2.setDisable(matchSource == MatchSource.SPECTRAL_LIBRARY);
 
     sortBox = new ComboBox<>(FXCollections.observableArrayList(SortMode.values()));
     sortBox.getSelectionModel().select(sortMode);
@@ -345,10 +341,13 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
    * @param match single match
    */
   public synchronized void addMatches(SpectralDBAnnotation match) {
-    if (!allMatches.contains(match)) {
+    synchronized (allMatches) {
+      if (allMatches.contains(match)) {
+        return;
+      }
       allMatches.add(match);
-      applyFilters();
     }
+    applyFilters();
   }
 
   /**
@@ -360,7 +359,9 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
     if (matches.isEmpty()) {
       return;
     }
-    allMatches.addAll(matches);
+    synchronized (allMatches) {
+      allMatches.addAll(matches);
+    }
     applyFilters();
   }
 
@@ -375,8 +376,10 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
         .filter(m -> m != null && m.getEntry() != null && m.getEntry().getDataPoints() != null
             && m.getEntry().getDataPoints().length > 0)
         .toList();
-    allMatches.clear();
-    allMatches.addAll(usable);
+    synchronized (allMatches) {
+      allMatches.clear();
+      allMatches.addAll(usable);
+    }
     matchPanels.clear();
     applyFilters();
   }
@@ -385,19 +388,22 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
   private void applyFilters() {
     synchronized (totalMatches) {
       totalMatches.clear();
-      for (SpectralDBAnnotation match : allMatches) {
-        if (isMs2Match(match)) {
-          if (cbFilterMs2 != null && !cbFilterMs2.isSelected()) {
-            continue;
+      synchronized (allMatches) {
+        for (SpectralDBAnnotation match : allMatches) {
+          if (isMs2Match(match)) {
+            if (cbFilterMs2 != null && !cbFilterMs2.isSelected()) {
+              continue;
+            }
+          } else {
+            if (cbFilterSpectral != null && !cbFilterSpectral.isSelected()) {
+              continue;
+            }
           }
-        } else {
-          if (cbFilterSpectral != null && !cbFilterSpectral.isSelected()) {
-            continue;
-          }
+          totalMatches.add(match);
         }
-        totalMatches.add(match);
       }
     }
+    currentIndex = 0;
     sortTotalMatches();
   }
 
@@ -423,6 +429,8 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
    */
   public void sortTotalMatches() {
     if (totalMatches.isEmpty()) {
+      matchPanels.clear();
+      visibleMatches.clear();
       setMatchingFinished();
       renewLayout();
       return;
@@ -465,7 +473,8 @@ public class SpectraIdentificationResultsPane extends AbstractFeatureListRowsPan
         for (SpectralDBAnnotation match : best) {
           if (!matchPanels.containsKey(match)) {
             // add and skip matches without datapoints
-            SpectralMatchPanelFX pn = new SpectralMatchPanelFX(match);
+            SpectralMatchPanelFX pn = new SpectralMatchPanelFX(match,
+                sortMode == SortMode.RESCORED);
             pn.setCoupleZoomY(isCouplingZoomY);
 //          pn.prefWidthProperty().bind(this.widthProperty());
             matchPanels.put(match, pn);
