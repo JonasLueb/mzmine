@@ -399,7 +399,6 @@ runtime {
             } else {
                 imageOptions = [
                         "--icon", "src/main/resources/mzmineIcon.icns",
-                        //"--mac-sign",
                         "--mac-package-name", appName,
                         "--mac-package-identifier", "io.github.mzmine.main",
                         "--mac-signing-key-user-name", developerID,
@@ -407,8 +406,6 @@ runtime {
                 ]
                 installerOptions = [
 //                        "--license-file", "LICENSE.txt", not required
-"--mac-sign",
-"--mac-signing-key-user-name", developerID,
                 ]
             }
             installerName = "mzmine_macOS_installer-academia"
@@ -452,6 +449,8 @@ task signApp(dependsOn: jpackage) {
 
         doLast {
             def execOps = project.services.get(org.gradle.process.ExecOperations)
+            // Optional: allow specifying a non-default keychain in CI via env or gradle property
+            def keychainPath = providers.gradleProperty("mac.sign.keychain").orNull ?: System.getenv("MACOS_SIGN_KEYCHAIN")
             Path entitlementsPth = layout.projectDirectory.dir('gradle/macos.entitlements').asFile.toPath()
             getLogger().info("imageDir " + imageDir)
             getLogger().info("jarsDir " + jarsDir)
@@ -460,16 +459,16 @@ task signApp(dependsOn: jpackage) {
 
             // Define codesign commands
             Consumer<Path> codesignWithEntitlements = { Path p ->
-                execOps.exec {
-                    commandLine(["codesign", "--deep", "--force", "--timestamp", "-s", "${developerID}", "--options",
-                                 "runtime", "--entitlements", "${entitlementsPth}", "-f", "-v", "${p}"])
-                }
+                def cmd = ["codesign", "--force", "--timestamp"]
+                if (keychainPath) { cmd += ["--keychain", keychainPath] }
+                cmd += ["-s", "${developerID}", "--options", "runtime", "--entitlements", "${entitlementsPth}", "-f", "-v", "${p}"]
+                execOps.exec { commandLine(cmd) }
             }
             Consumer<Path> codesignRuntimeOnly = { Path p ->
-                execOps.exec {
-                    commandLine(["codesign", "--force", "--timestamp", "-s", "${developerID}", "--options",
-                                 "runtime", "-v", "${p}"])
-                }
+                def cmd = ["codesign", "--force", "--timestamp"]
+                if (keychainPath) { cmd += ["--keychain", keychainPath] }
+                cmd += ["-s", "${developerID}", "--options", "runtime", "-v", "${p}"]
+                execOps.exec { commandLine(cmd) }
             }
 
             // Clear any quarantine attributes on the entire app before signing
@@ -498,116 +497,60 @@ task signApp(dependsOn: jpackage) {
                 // optional cleanup
             }
 
-            // unzip previously done for internal parser
-//            String mzmineJarName = "mzmine-community-${semver.version}"
-//            exec { commandLine(['sh', '-c', "cd ${jarsDir} && unzip -q ${mzmineJarName}.jar -d ${mzmineJarName}"]) }
 
-            getLogger().lifecycle("Signing native libraries...")
 
-            // Traverse over whole .app and sign each native library
-            Path runtimeDir = imageDir.resolve('Contents').resolve('runtime')
-            Files.find(imageDir, 999, { p, bfa ->
-                bfa.isRegularFile() && p.getFileName().toString().matches(".*\\.dylib|.*\\.so|.*\\.dll|.*\\.a|.*\\.lib") &&
-                        !p.toAbsolutePath().startsWith(runtimeDir.toAbsolutePath())
-            } as java.util.function.BiPredicate)
-                    .forEach { Path nativeLib ->
-                        getLogger().lifecycle("Signing native lib '${nativeLib}'")
-                        codesignRuntimeOnly(nativeLib.toAbsolutePath())
-                    }
+            getLogger().lifecycle("Signing nested Mach-O files (executables and dylibs)...")
 
-            // sign thermo raw file parser
-            def thermoParserPath = imageDir.resolve("Contents").resolve("external_tools").resolve("thermo_raw_file_parser").resolve("ThermoRawFileParser").toAbsolutePath()
-            getLogger().info("Thermo parser path " + thermoParserPath)
-            // ensure executable bit and remove quarantine
-            execOps.exec { commandLine(['chmod', '+x', "${thermoParserPath}"]) }
-            execOps.exec { commandLine(['xattr', '-d', 'com.apple.quarantine', "${thermoParserPath}"]); ignoreExitValue = true }
-            // pre-check (non-fatal) before applying entitlements
-            execOps.exec { commandLine(['/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=4', "${thermoParserPath}"]); ignoreExitValue = true }
-            codesignWithEntitlements(thermoParserPath)
-            // verify after signing (non-fatal)
-            execOps.exec { commandLine(['/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=4', "${thermoParserPath}"]); ignoreExitValue = true }
-
-            // Sign additional executables shipped with the parser
-            Path trfpDirForExecs = imageDir.resolve('Contents').resolve('external_tools').resolve('thermo_raw_file_parser')
-            try {
-                // Clear quarantine on the entire parser directory (best-effort)
-                execOps.exec { commandLine(['xattr', '-r', '-d', 'com.apple.quarantine', trfpDirForExecs.toFile().absolutePath]); ignoreExitValue = true }
-            } catch (Exception ignored) {}
-            if (Files.exists(trfpDirForExecs)) {
-                Files.find(trfpDirForExecs, 10, { p, bfa ->
-                    bfa.isRegularFile() && java.nio.file.Files.isExecutable(p)
-                } as java.util.function.BiPredicate).forEach { Path exe ->
-                    try {
-                        getLogger().lifecycle("Signing external tool executable '${exe}'")
-                        // Ensure executable bit
-                        execOps.exec { commandLine(['chmod', '+x', exe.toFile().absolutePath]) }
-                        if (exe.fileName.toString() == 'ThermoRawFileParser') {
-                            codesignWithEntitlements(exe.toAbsolutePath())
-                        } else {
-                            codesignRuntimeOnly(exe.toAbsolutePath())
-                        }
-                    } catch (Exception ignored) {}
-                }
+            Path contentsDir = imageDir.resolve('Contents')
+            // Sign all executables under Contents
+            Files.find(contentsDir, 999, { p, bfa ->
+                bfa.isRegularFile() && java.nio.file.Files.isExecutable(p)
+            } as java.util.function.BiPredicate).forEach { Path exe ->
+                codesignRuntimeOnly(exe.toAbsolutePath())
             }
 
-            getLogger().lifecycle("Signing libraires nested in jars...")
-
-            // Dynamically find and sign all native libraries in JARs
-            Path tmpJarsDir = layout.buildDirectory.dir("tmp/jarLibs").get().asFile.toPath()
-            Files.createDirectories(tmpJarsDir)
-
-            // Find all JAR files in the app directory
-            jarsDir.toFile().listFiles().findAll { it.name.endsWith('.jar') }.each { jarFile ->
-                getLogger().lifecycle("Processing jar for native libraries: ${jarFile.name}")
-                java.nio.file.FileSystem jarFs = null
-                try {
-                    jarFs = FileSystems.newFileSystem(jarFile.toPath(), [:])
-                    // Find all native libraries in this JAR
-                    Files.walk(jarFs.getPath("/")).forEach({ path ->
-                        if (path.getFileName().toString().matches(".*\\.(dylib|jnilib|so|dll)")) {
-                            getLogger().lifecycle("Found native library in ${jarFile.name}: ${path}")
-                            Path tmpPath = tmpJarsDir.resolve(jarFile.name + "_" + path.getFileName().toString())
-                            Files.copy(path, tmpPath, StandardCopyOption.REPLACE_EXISTING)
-                        codesignRuntimeOnly(tmpPath.toAbsolutePath())
-                            Files.copy(tmpPath, path, StandardCopyOption.REPLACE_EXISTING)
-                        }
-                    } as java.util.function.Consumer)
-                } finally {
-                    try { jarFs?.close() } catch (Exception ignored) {}
-                }
+            // Sign all dynamic libraries under Contents
+            Files.find(contentsDir, 999, { p, bfa ->
+                bfa.isRegularFile() && p.getFileName().toString().matches(".*\\.(dylib|jnilib)")
+            } as java.util.function.BiPredicate).forEach { Path lib ->
+                codesignRuntimeOnly(lib.toAbsolutePath())
             }
 
-            // Explicitly sign embedded executables (e.g., ThermoRawFileParser)
-            try {
-                Path trfpPath = imageDir.resolve('Contents').resolve('external_tools').resolve('thermo_raw_file_parser').resolve('ThermoRawFileParser')
-                if (Files.exists(trfpPath)) {
-                    getLogger().lifecycle("Signing embedded executable '${trfpPath}'")
-                    // Ensure executable bit
-                    execOps.exec { commandLine(['chmod', '+x', trfpPath.toFile().absolutePath]) }
-                    codesignWithEntitlements(trfpPath.toAbsolutePath())
-                }
-            } catch (Exception ignored) {
-                // proceed even if missing
+            // Sign any framework bundles at their bundle root (not just the inner dylib)
+            Files.find(contentsDir, 999, { p, bfa ->
+                bfa.isDirectory() && p.getFileName().toString().endsWith('.framework')
+            } as java.util.function.BiPredicate).forEach { Path frameworkDir ->
+                codesignRuntimeOnly(frameworkDir.toAbsolutePath())
             }
 
-            getLogger().lifecycle("Signing jars...")
+            // Sign any nested helper apps under Contents (if present) without entitlements
+            Files.find(contentsDir, 999, { p, bfa ->
+                bfa.isDirectory() && p.getFileName().toString().endsWith('.app')
+            } as java.util.function.BiPredicate).forEach { Path nestedAppDir ->
+                codesignRuntimeOnly(nestedAppDir.toAbsolutePath())
+            }
 
-            // Traverse over entire .app and sign each .jar
-            Files.find(imageDir, 999, { p, bfa ->
-                bfa.isRegularFile() && p.getFileName().toString().matches(".*\\.jar")
-            } as java.util.function.BiPredicate)
-                    .forEach { Path jar ->
-                        getLogger().lifecycle("Signing jar '${jar}'")
-                        codesignRuntimeOnly(jar.toAbsolutePath())
-                    }
+            // Re-sign the embedded runtime bundle root after signing its children
+            Path runtimeBundle = contentsDir.resolve('runtime')
+            if (Files.exists(runtimeBundle)) {
+                codesignRuntimeOnly(runtimeBundle.toAbsolutePath())
+            }
 
-            // delete duplicated libs
-            //jarsDir.resolveSibling('runtime/Contents/MacOS').resolve("libjli.dylib").toFile().delete()
+            // Apply entitlements to the embedded Java runtime executables (JIT, etc.)
+            Path runtimeHome = contentsDir.resolve('runtime').resolve('Contents').resolve('Home')
+            Path binDir = runtimeHome.resolve('bin')
+            if (Files.exists(binDir)) {
+                Files.find(binDir, 1, { p, bfa -> bfa.isRegularFile() && java.nio.file.Files.isExecutable(p) } as java.util.function.BiPredicate)
+                        .forEach { Path exe -> codesignWithEntitlements(exe.toAbsolutePath()) }
+            }
+            Path jspawn = runtimeHome.resolve('lib').resolve('jspawnhelper')
+            if (Files.exists(jspawn)) { codesignWithEntitlements(jspawn.toAbsolutePath()) }
 
-            // Sign .app directory
-            getLogger().lifecycle("Signing .app directory...")
-            // Sign the .app with entitlements last
+            getLogger().lifecycle("Signing app bundle with entitlements...")
             codesignWithEntitlements(imageDir)
+
+            // Verify bundle after final sign
+            execOps.exec { commandLine(["codesign", "--verify", "--strict", "--verbose=4", imageDir.toString()]) }
         }
     }
 }
@@ -638,11 +581,9 @@ task notarizeApp(dependsOn: signApp) {
 
             // Sign the DMG itself
             getLogger().lifecycle("Signing DMG...")
-            execOps.exec {
-                commandLine(['codesign', '--force', '--sign', "${developerID}", '--timestamp',
-                             '--options', 'runtime', dmgFile.name])
-                workingDir jpackageDir
-            }
+            def dmgSignCmd = ['codesign', '--force', '--sign', "${developerID}", '--timestamp', '-i', 'io.github.mzmine.dmg', dmgFile.name]
+            if (System.getenv('MACOS_SIGN_KEYCHAIN')) { dmgSignCmd = dmgSignCmd.collate(1).flatten(); dmgSignCmd.addAll(1, ['--keychain', System.getenv('MACOS_SIGN_KEYCHAIN')]) }
+            execOps.exec { commandLine(dmgSignCmd); workingDir jpackageDir }
 
             getLogger().lifecycle("Notarizing DMG...")
             // Notarize the DMG
