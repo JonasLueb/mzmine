@@ -38,3 +38,5 @@ dev-run.sh
 
 .cursor/
 .tmp-diffms/
+
+.serena/
