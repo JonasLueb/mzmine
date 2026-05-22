@@ -29,7 +29,7 @@ import io.github.mzmine.gui.DesktopService;
 import io.github.mzmine.gui.preferences.MZminePreferences;
 import io.github.mzmine.util.StringUtils;
 import io.github.mzmine.util.files.FileAndPathUtil;
-import io.mzio.mzmine.startup.MZmineCoreArgumentParser;
+import io.mzio.mzmine.startup.MzmineCliArgs;
 import io.mzio.users.gui.fx.LoginOptions;
 import io.mzio.users.gui.fx.UsersController;
 import io.mzio.users.user.CurrentUserService;
@@ -40,44 +40,45 @@ import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Helper class to apply all parsed args from the
- * {@link io.mzio.mzmine.startup.MZmineCoreArgumentParser} to the {@link ConfigService}.
+ * Helper class to apply all parsed args from the parser-agnostic {@link MzmineCliArgs} holder to
+ * the {@link ConfigService}.
  */
 class ArgsToConfigUtils {
 
   private static final Logger logger = Logger.getLogger(ArgsToConfigUtils.class.getName());
 
   /**
-   * Parses all relevant arguments from the given program arguments and initialises the
-   * {@link MZmineCoreArgumentParser} instance in this class.
+   * Applies every relevant CLI argument to {@link ConfigService}. Reads the parser-agnostic
+   * {@link MzmineCliArgs} produced by either the legacy Commons CLI parser or the picocli
+   * subcommand tree.
    *
-   * @param argsParser The args parser
+   * @param args parsed command-line arguments
    */
-  static void applyArgsToConfig(final MZmineCoreArgumentParser argsParser) {
-    ConfigService.setTdfPseudoProfile(argsParser.isLoadTdfPseudoProfile());
+  static void applyArgsToConfig(final MzmineCliArgs args) {
+    ConfigService.setTdfPseudoProfile(args.loadTdfPseudoProfile());
 
-    checkAndLoadArgsConfiguration(argsParser);
+    checkAndLoadArgsConfiguration(args);
     TmpFileCleanup.runCleanup(); // clean old temp files in old dir
 
     // parse args temp dir after config was loaded, so we can override
-    checkAndOverrideArgsTempDir(argsParser);
+    checkAndOverrideArgsTempDir(args);
     applyTempDirFromConfiguration();
     TmpFileCleanup.runCleanup(); // clean temp files in new dir
 
-    checkAndOverrideArgsUser(argsParser);
+    checkAndOverrideArgsUser(args);
 
-    checkAndOverrideArgsMemoryOption(argsParser);
+    checkAndOverrideArgsMemoryOption(args);
 
-    setNumThreadsOverride(argsParser);
+    setNumThreadsOverride(args);
 
-    checkAndHandleArgsUserLoginOptions(argsParser);
+    checkAndHandleArgsUserLoginOptions(args);
 
-    ConfigService.setIgnoreParameterWarningsInBatch(argsParser.isIgnoreParameterWarnings());
+    ConfigService.setIgnoreParameterWarningsInBatch(args.ignoreParameterWarnings());
   }
 
-  static void checkAndOverrideArgsTempDir(MZmineCoreArgumentParser argsParser) {
+  static void checkAndOverrideArgsTempDir(final @NotNull MzmineCliArgs args) {
     // override temp directory
-    final File tempDirectory = argsParser.getTempDirectory();
+    final File tempDirectory = args.tempDirectory();
     if (tempDirectory != null) {
       // needs to be accessible
       if (FileAndPathUtil.createDirectory(tempDirectory)) {
@@ -90,28 +91,28 @@ class ArgsToConfigUtils {
     }
   }
 
-  static void checkAndHandleArgsUserLoginOptions(MZmineCoreArgumentParser argsParser) {
-    final boolean isCliBatchProcessing = argsParser.getBatchFile() != null;
+  static void checkAndHandleArgsUserLoginOptions(final @NotNull MzmineCliArgs args) {
+    final boolean isCliBatchProcessing = args.batchFile() != null;
 
     // login user by cli direct password
-    if (argsParser.isCliLoginPassword()) {
+    if (args.cliLoginPassword()) {
       if (commandLineLogin(isCliBatchProcessing, LoginOptions.CONSOLE_ENTER_CREDENTIALS)) {
         return;
       }
     }
 
     // login user if cli option
-    if (argsParser.isCliLogin()) {
+    if (args.cliLogin()) {
       if (commandLineLogin(isCliBatchProcessing, LoginOptions.CONSOLE)) {
         return;
       }
     }
   }
 
-  static void checkAndOverrideArgsMemoryOption(@NotNull final MZmineCoreArgumentParser argsParser) {
+  static void checkAndOverrideArgsMemoryOption(final @NotNull MzmineCliArgs args) {
     KeepInMemory keepInMemory;
     try {
-      var memory = argsParser.isKeepInMemory();
+      final String memory = args.keepInMemory();
       if (StringUtils.hasValue(memory)) {
         keepInMemory = KeepInMemory.parse(memory);
 
@@ -135,10 +136,10 @@ class ArgsToConfigUtils {
     keepInMemory.enforceToMemoryMapping();
   }
 
-  static void checkAndOverrideArgsUser(@NotNull final MZmineCoreArgumentParser argsParser) {
-    if (argsParser.getUserFile() == null) {
+  static void checkAndOverrideArgsUser(final @NotNull MzmineCliArgs args) {
+    if (args.userFile() == null) {
       // listen for user changes so that the latest user is saved
-      String username = ConfigService.getPreference(MZminePreferences.username);
+      final String username = ConfigService.getPreference(MZminePreferences.username);
       // this will set the current user to CurrentUserService
       // loads all users already logged in from the user folder
       if (StringUtils.hasValue(username)) {
@@ -147,9 +148,9 @@ class ArgsToConfigUtils {
     }
   }
 
-  static void checkAndLoadArgsConfiguration(@NotNull final MZmineCoreArgumentParser argsParser) {
+  static void checkAndLoadArgsConfiguration(final @NotNull MzmineCliArgs args) {
     // override preferences file by command line argument pref
-    final File prefFile = Objects.requireNonNullElse(argsParser.getPreferencesFile(),
+    final File prefFile = Objects.requireNonNullElse(args.preferencesFile(),
         MZmineConfiguration.CONFIG_FILE);
     if ("null".equals(prefFile.getName())) {
       logger.info("Preference file was set to null, not loading configuration.");
@@ -172,8 +173,8 @@ class ArgsToConfigUtils {
   /**
    * Set number of cores to automatic or to fixed number
    */
-  static void setNumThreadsOverride(@NotNull final MZmineCoreArgumentParser argsParser) {
-    final String numCores = argsParser.getNumCores();
+  static void setNumThreadsOverride(final @NotNull MzmineCliArgs args) {
+    final String numCores = args.numCores();
     if (numCores != null) {
       // set to preferences
       var parameter = ConfigService.getPreferences().getParameter(MZminePreferences.numOfThreads);

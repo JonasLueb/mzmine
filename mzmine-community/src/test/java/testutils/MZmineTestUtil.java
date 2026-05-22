@@ -52,6 +52,7 @@ import io.github.mzmine.datamodel.RawDataFile;
 import io.github.mzmine.datamodel.features.FeatureList;
 import io.github.mzmine.gui.preferences.VendorImportParameters;
 import io.github.mzmine.main.MZmineCore;
+import io.mzio.mzmine.startup.MzmineCliArgs;
 import io.github.mzmine.modules.MZmineRunnableModule;
 import io.github.mzmine.modules.io.import_rawdata_all.AdvancedSpectraImportParameters;
 import io.github.mzmine.modules.io.import_rawdata_all.AllSpectralDataImportModule;
@@ -228,7 +229,15 @@ public class MZmineTestUtil {
 
   public static void startMzmineCore() {
     try {
-      MZmineCore.main(new String[]{"-r", "-m", "all", "-pref", "null"});
+      // Equivalent to the historical "-r -m all -pref null" bootstrap, but built programmatically
+      // so we don't have to round-trip through the picocli CLI (which would System.exit on success
+      // and pull in GUI launch). Calling startUp() directly is the canonical headless bootstrap.
+      final MzmineCliArgs args = MzmineCliArgs.builder()
+          .keepRunningAfterBatch(true)
+          .keepInMemory("all")
+          .preferencesFile(new java.io.File("null"))
+          .build();
+      MZmineCore.getInstance().startUp(args);
     } catch (Exception ex) {
       // might be already initialized
       logger.log(Level.INFO,

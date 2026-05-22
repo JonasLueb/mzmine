@@ -61,7 +61,7 @@ import io.github.mzmine.util.web.ProxyUtils;
 import io.github.mzmine.util.web.proxy.FullProxyConfig;
 import io.mzio.events.AuthRequiredEvent;
 import io.mzio.events.EventService;
-import io.mzio.mzmine.startup.MZmineCoreArgumentParser;
+import io.mzio.mzmine.startup.MzmineCliArgs;
 import io.mzio.users.gui.fx.LoginOptions;
 import io.mzio.users.gui.fx.UsersController;
 import io.mzio.users.user.CurrentUserService;
@@ -107,16 +107,26 @@ public final class MZmineCore {
   }
 
   /**
-   * Main method
+   * Main method. After the L0 CLI overhaul this delegates to the picocli root in {@code
+   * io.mzio.mzmine.cli.MzmineCli}. Loaded via reflection to keep mzmine-community (open core)
+   * free of a build-time dependency on mzmine-cli (commercial); the runtime classpath of every
+   * mzmine distribution bundles mzmine-cli.
+   * <p>
+   * Subcommand bodies (notably {@code RunCommand.call()} and the root {@code MzmineCli.call()})
+   * call back into {@link #startUp(MzmineCliArgs)} and {@link #launchBatchOrGui(String[],
+   * MzmineCliArgs)} directly — those entry points remain the canonical startup API.
    */
   public static void main(final String[] args) {
     try {
       printDebugInfo(args);
-      final MZmineCoreArgumentParser argsParser = new MZmineCoreArgumentParser(args);
-      getInstance().startUp(argsParser);
-
-      launchBatchOrGui(args, argsParser);
-
+      final Class<?> cliClass = Class.forName("io.mzio.mzmine.cli.MzmineCli");
+      final int exitCode = (int) cliClass.getMethod("run", String[].class)
+          .invoke(null, (Object) args);
+      System.exit(exitCode);
+    } catch (ClassNotFoundException ex) {
+      logger.log(Level.SEVERE,
+          "mzmine-cli is missing from the runtime classpath. Cannot dispatch CLI.", ex);
+      exit(null);
     } catch (Exception ex) {
       logger.log(Level.SEVERE, "Error during mzmine start up", ex);
       exit(null);
@@ -129,13 +139,13 @@ public final class MZmineCore {
    * the batch or gui. Note: not static so it ensures that the {@link MZmineCore#init()} method is
    * called.
    */
-  public void startUp(@NotNull final MZmineCoreArgumentParser argsParser) {
+  public void startUp(@NotNull final MzmineCliArgs cliArgs) {
     ProxyTestUtils.logProxyState("Proxy on startup:");
     ProxyUtils.applyConfig(FullProxyConfig.defaultConfig());
     ProxyTestUtils.logProxyState("Proxy after default config:");
 
     // this also changes proxy settings after load
-    ArgsToConfigUtils.applyArgsToConfig(argsParser);
+    ArgsToConfigUtils.applyArgsToConfig(cliArgs);
 
     // so log state after load
     ProxyTestUtils.logProxyState("Auto proxy after config loading:");
@@ -151,6 +161,37 @@ public final class MZmineCore {
 
     // after loading the config and numCores
     TaskService.init(ConfigService.getConfiguration().getNumOfThreads());
+
+    // Run hooks registered with addPostStartupHook(...). Used by downstream entry points (e.g.
+    // MZmineProCore) to slot work between configuration apply and GUI/batch launch — the spot
+    // where the user is loaded but the desktop is not yet up. Hooks are drained so re-running
+    // startUp (in tests) doesn't double-fire them.
+    final Runnable[] hooks;
+    synchronized (postStartupHooks) {
+      hooks = postStartupHooks.toArray(Runnable[]::new);
+      postStartupHooks.clear();
+    }
+    for (final Runnable hook : hooks) {
+      try {
+        hook.run();
+      } catch (Exception ex) {
+        logger.log(Level.WARNING, "Post-startup hook threw", ex);
+      }
+    }
+  }
+
+  private static final java.util.List<Runnable> postStartupHooks = new java.util.ArrayList<>();
+
+  /**
+   * Register a hook that runs at the end of {@link #startUp(MzmineCliArgs)}, after configuration
+   * + user are loaded but before {@link #launchBatchOrGui(String[], MzmineCliArgs)} sets up the
+   * desktop. Useful for entry points (e.g. mzminepro) that need to make user-conditional choices
+   * before the GUI/batch path runs. Hooks fire once and are then cleared.
+   */
+  public static void addPostStartupHook(@NotNull final Runnable hook) {
+    synchronized (postStartupHooks) {
+      postStartupHooks.add(hook);
+    }
   }
 
   public static void checkUserRemainingDays(MZmineUser user) {
@@ -230,14 +271,14 @@ public final class MZmineCore {
   }
 
   /**
-   * @param args       the program arguments, required to launch the gui.
-   * @param argsParser Args parser for easy access to e.g. the batch file.
+   * @param args    the program arguments, required to launch the gui.
+   * @param cliArgs Parser-agnostic args holder for batch/output overrides.
    */
-  public static void launchBatchOrGui(String[] args, MZmineCoreArgumentParser argsParser) {
+  public static void launchBatchOrGui(final String[] args, final @NotNull MzmineCliArgs cliArgs) {
     // batch mode defined by command line argument
-    final File batchFile = argsParser.getBatchFile();
+    final File batchFile = cliArgs.batchFile();
     final boolean isCliBatchProcessing = batchFile != null;
-    final boolean keepRunningInHeadless = argsParser.isKeepRunningAfterBatch();
+    final boolean keepRunningInHeadless = cliArgs.keepRunningAfterBatch();
     final boolean headLessMode = (isCliBatchProcessing || keepRunningInHeadless);
 
     // If we have no arguments, run in GUI mode, otherwise run in batch mode
@@ -276,10 +317,10 @@ public final class MZmineCore {
       }
 
       // change input in batch?
-      final String outBaseFile = argsParser.getOutBaseFile();
-      final File[] overrideDataFiles = argsParser.getOverrideDataFiles();
-      final File overrideMetadataFile = argsParser.getMetadataFile();
-      final File[] overrideSpectralLibraryFiles = argsParser.getOverrideSpectralLibrariesFiles();
+      final String outBaseFile = cliArgs.outBaseFile();
+      final File[] overrideDataFiles = cliArgs.overrideDataFiles();
+      final File overrideMetadataFile = cliArgs.metadataFile();
+      final File[] overrideSpectralLibraryFiles = cliArgs.overrideSpectralLibrariesFiles();
 
       // run batch file
       batchTask = BatchModeModule.runBatchFile(ProjectService.getProject(), batchFile,
