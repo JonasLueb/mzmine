@@ -23,6 +23,17 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.named
+import org.gradle.kotlin.dsl.withType
+
 plugins {
     java
 }
@@ -32,11 +43,11 @@ plugins {
 group = "io.github.mzmine"
 
 // https://github.com/gradle/gradle/issues/15383
-val libs = versionCatalogs.named("libs")
+val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
-java {
+extensions.configure<JavaPluginExtension> {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(libs.findVersion("jdk").get().strictVersion)
+        languageVersion.set(JavaLanguageVersion.of(libs.findVersion("jdk").get().strictVersion))
     }
 }
 
@@ -64,34 +75,27 @@ repositories {
 dependencies {
     // issue type safe access to libs is not implemented
     // https://github.com/gradle/gradle/issues/15383
-    implementation(libs.findBundle("default-convention").get())
+    add("implementation", libs.findBundle("default-convention").get())
     // tests
-    testImplementation(libs.findLibrary("junit.jupiter").get())
-    testRuntimeOnly(libs.findLibrary("junit.platform").get())
-    testImplementation(libs.findLibrary("mockito").get())
+    add("testImplementation", libs.findLibrary("junit.jupiter").get())
+    add("testRuntimeOnly", libs.findLibrary("junit.platform").get())
+    add("testImplementation", libs.findLibrary("mockito").get())
 }
 
-tasks.compileJava {
+tasks.withType<JavaCompile>().configureEach {
     val compilerArgs = options.compilerArgs
     compilerArgs.add("--enable-preview")
     options.encoding = "UTF-8"
 }
 
-tasks {
-    withType<JavaCompile>().configureEach {
-        val compilerArgs = options.compilerArgs
-        compilerArgs.add("--enable-preview")
-        options.encoding = "UTF-8"
-    }
-    withType<JavaExec>().configureEach {
-        jvmArgs("--enable-preview")
-    }
+tasks.withType<JavaExec>().configureEach {
+    jvmArgs("--enable-preview")
+}
 
-    test {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
-        }
-        jvmArgs("--enable-preview")
+tasks.named<Test>("test") {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
     }
+    jvmArgs("--enable-preview")
 }

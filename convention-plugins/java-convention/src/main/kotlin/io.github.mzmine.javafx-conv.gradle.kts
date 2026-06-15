@@ -23,18 +23,23 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.getByType
+import org.openjfx.gradle.JavaFXOptions
+
 plugins {
     id("io.github.mzmine.java-common-conv")
     id("org.openjfx.javafxplugin")
 }
 
 // https://github.com/gradle/gradle/issues/15383
-val libs = versionCatalogs.named("libs")
+val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 /*
  * Include JavaFX modules
  */
-javafx {
+extensions.configure<JavaFXOptions> {
     version = libs.findVersion("javafx").get().strictVersion
 //    version = "23.0.2"
     modules(
@@ -49,5 +54,5 @@ javafx {
 
 
 dependencies {
-    implementation(libs.findBundle("javafx-convention").get())
+    add("implementation", libs.findBundle("javafx-convention").get())
 }

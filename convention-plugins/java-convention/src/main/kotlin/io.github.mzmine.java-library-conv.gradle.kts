@@ -1,8 +1,9 @@
 plugins {
     id("io.github.mzmine.java-common-conv")
-    `java-library`
-    `maven-publish`
 }
+
+pluginManager.apply("java-library")
+pluginManager.apply("maven-publish")
 
 repositories {
     mavenLocal()
