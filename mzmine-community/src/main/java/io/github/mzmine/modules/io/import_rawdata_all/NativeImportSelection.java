@@ -29,13 +29,21 @@ public final class NativeImportSelection {
    * Cancellation returns an empty result and never creates tasks.
    */
   public static @NotNull Optional<PreparedImport> showDialog() {
+    final ParameterSet initial = ConfigService.getConfiguration()
+        .getModuleParameters(AllSpectralDataImportModule.class).cloneParameterSet();
+    return showDialog(initial);
+  }
+
+  /**
+   * Opens the standard import dialog with a detached initial selection. This is useful for native
+   * folder discovery while still letting the user review and edit every import setting.
+   */
+  public static @NotNull Optional<PreparedImport> showDialog(final @NotNull ParameterSet initial) {
     if (!Platform.isFxApplicationThread()) {
       throw new IllegalStateException(
           "Native import selection must run on the JavaFX application thread.");
     }
-
-    final ParameterSet dialogParameters = ConfigService.getConfiguration()
-        .getModuleParameters(AllSpectralDataImportModule.class).cloneParameterSet();
+    final ParameterSet dialogParameters = initial.cloneParameterSet();
     if (dialogParameters.showSetupDialog(true) != ExitCode.OK) {
       return Optional.empty();
     }

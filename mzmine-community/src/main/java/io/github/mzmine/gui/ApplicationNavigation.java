@@ -54,7 +54,8 @@ public final class ApplicationNavigation {
     }
   }
 
-  private static void focus(final @NotNull MZmineTab tab) {
+  public static void focus(final @NotNull MZmineTab tab) {
+    requireFxThread();
     if (tab.getTabPane() != null) {
       tab.getTabPane().getSelectionModel().select(tab);
       final Window window = tab.getTabPane().getScene() == null ? null

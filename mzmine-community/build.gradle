@@ -257,6 +257,8 @@ dependencies {
     implementation group: 'com.alanmrace', name: 'jimzmlparser', version: '1.0.3'
     implementation "com.github.yannrichet:JMathPlot:1.0.1"
     implementation "de.jensd:fontawesomefx-fontawesome:4.7.0-9.1.2"
+
+    implementation "org.moeaframework:moeaframework:5.1"
 }
 
 configurations.configureEach {

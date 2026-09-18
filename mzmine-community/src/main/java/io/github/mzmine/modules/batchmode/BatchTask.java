@@ -880,4 +880,12 @@ public class BatchTask extends AbstractTask {
     }
     return false;
   }
+
+  @Nullable
+  public List<FeatureList> getLatestCreatedFeatureLists() {
+    if(createdFeatureLists != null && !createdFeatureLists.isEmpty()) {
+      return createdFeatureLists;
+    }
+    return previousCreatedFeatureLists;
+  }
 }

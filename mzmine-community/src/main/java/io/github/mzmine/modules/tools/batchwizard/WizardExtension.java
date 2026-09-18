@@ -21,8 +21,8 @@ import org.jetbrains.annotations.Nullable;
 /** A per-tab contribution supplied by the application at startup. All methods run on the FX thread. */
 public interface WizardExtension {
 
-  /** Controls shown below the wizard toolbar. Return a fresh, unattached node. */
-  @NotNull Node createControls();
+  /** Optional controls below the wizard toolbar; null supports context-only integrations. */
+  @Nullable Node createControls();
 
   /** Optional context below a part's parameters. Called again whenever the panes are rebuilt. */
   default @Nullable Node createPartContent(final @NotNull WizardStepParameters step) {

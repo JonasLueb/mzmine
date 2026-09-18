@@ -256,6 +256,7 @@ public class TDFImportTask extends AbstractTask implements RawDataImportTask {
     }
 
     newMZmineFile.setStartTimeStamp(metaDataTable.getAcquisitionDateTime());
+    newMZmineFile.setAcquisitionMetadata(metaDataTable.acquisitionMetadata(frameTable.getScanModeColumn()));
 
     rawDataFileName = tdfBin.getParentFile().getName();
     synchronized (org.sqlite.JDBC.class) {

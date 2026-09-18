@@ -41,6 +41,14 @@ public class MzMLRawDataFile {
   private static final @NotNull FileType fileType = FileType.MZML;
 
   private final File sourceFile;
+  private io.github.mzmine.datamodel.AcquisitionMetadata acquisitionMetadata =
+      io.github.mzmine.datamodel.AcquisitionMetadata.EMPTY;
+  public @NotNull io.github.mzmine.datamodel.AcquisitionMetadata getAcquisitionMetadata() {
+    return acquisitionMetadata;
+  }
+  public void setAcquisitionMetadata(final @NotNull io.github.mzmine.datamodel.AcquisitionMetadata value) {
+    acquisitionMetadata = value;
+  }
 
   private final @NotNull List<String> msFunctions;
   /**

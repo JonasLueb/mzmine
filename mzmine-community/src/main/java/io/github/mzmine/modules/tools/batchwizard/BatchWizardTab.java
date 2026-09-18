@@ -25,6 +25,7 @@
 
 package io.github.mzmine.modules.tools.batchwizard;
 
+import static io.github.mzmine.modules.tools.batchwizard.WizardPart.DATA_IMPORT;
 import static io.github.mzmine.modules.tools.batchwizard.WizardPart.WORKFLOW;
 
 import io.github.mzmine.gui.DesktopService;
@@ -34,6 +35,7 @@ import io.github.mzmine.javafx.components.util.FxLayout;
 import io.github.mzmine.javafx.dialogs.DialogLoggerUtil;
 import io.github.mzmine.javafx.util.FxIconUtil;
 import io.github.mzmine.javafx.util.FxIcons;
+import io.github.mzmine.main.ConfigService;
 import io.github.mzmine.main.MZmineCore;
 import io.github.mzmine.modules.batchmode.BatchModeModule;
 import io.github.mzmine.modules.batchmode.BatchModeParameters;
@@ -50,15 +52,26 @@ import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.IonInt
 import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.IonMobilityWizardParameterFactory;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.MassSpectrometerWizardParameterFactory;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.WorkflowWizardParameterFactory;
+import io.github.mzmine.modules.tools.tools_autoparam.DataFileStatisticsDashboardPane;
+import io.github.mzmine.modules.tools.tools_autoparam.estimation.RawDataPreparation;
+import io.github.mzmine.modules.tools.tools_autoparam.estimation.WizardParameterEstimationResult;
+import io.github.mzmine.modules.tools.tools_autoparam.estimation.WizardParameterEstimationTask;
+import io.github.mzmine.modules.tools.tools_autoparam.optimizer.BatchOptimizationMainTask;
+import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerModule;
+import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerParameters;
 import io.github.mzmine.modules.visualization.projectmetadata.extract.SampleMetadataExtractionParameters;
 import io.github.mzmine.parameters.ParameterUtils;
 import io.github.mzmine.parameters.dialogs.ParameterSetupPane;
 import io.github.mzmine.parameters.parametertypes.filenames.FileNamesComponent;
 import io.github.mzmine.parameters.parametertypes.filenames.LastFilesButton;
+import io.github.mzmine.taskcontrol.TaskService;
+import io.github.mzmine.taskcontrol.TaskStatus;
 import io.github.mzmine.util.ExitCode;
+import io.github.mzmine.util.MemoryMapStorage;
 import io.mzio.links.MzioMZmineLinks;
 import java.io.File;
 import java.text.MessageFormat;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -87,6 +100,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TabPane.TabClosingPolicy;
 import javafx.scene.control.TabPane.TabDragPolicy;
+import javafx.scene.control.Tooltip;
 import javafx.scene.effect.ColorAdjust;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -98,6 +112,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Subscription;
+import org.controlsfx.control.ToggleSwitch;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -121,10 +136,11 @@ public class BatchWizardTab extends SimpleTab {
   private final List<WizardExtension> extensions;
   private final LastFilesButton localPresetsButton;
   private final SimpleBooleanProperty advancedMode = new SimpleBooleanProperty(false);
+  private final SimpleBooleanProperty parameterEstimationRunning = new SimpleBooleanProperty(false);
+  private final int helpButtonSize = 50;
   private boolean listenersActive = true;
   private TabPane tabPane;
   private HBox schemaPane;
-  private final int helpButtonSize = 50;
 
   public BatchWizardTab() {
     super("mzwizard");
@@ -160,7 +176,8 @@ public class BatchWizardTab extends SimpleTab {
       mainPane.setTop(topPane);
     } else {
       final VBox toolbar = new VBox(topPane);
-      extensions.forEach(extension -> toolbar.getChildren().add(extension.createControls()));
+      extensions.stream().map(WizardExtension::createControls).filter(java.util.Objects::nonNull)
+          .forEach(toolbar.getChildren()::add);
       mainPane.setTop(toolbar);
     }
     setContent(mainPane);
@@ -445,20 +462,27 @@ public class BatchWizardTab extends SimpleTab {
           });
     }
 
-    Button createBatch = FxButtons.createButton("Create batch", FxIcons.START, null,
+    final Button createBatch = FxButtons.createButton("Create batch", FxIcons.START, null,
         this::createBatch);
-    Button save = FxButtons.createSaveButton("Save presets", this::saveLocalWizardSequence);
-    Button load = FxButtons.createLoadButton("Load presets", this::chooseAndLoadLocalSequence);
+    final Button save = FxButtons.createSaveButton("Save presets", this::saveLocalWizardSequence);
+    final Button load = FxButtons.createLoadButton("Load presets",
+        this::chooseAndLoadLocalSequence);
+    final Button estimate = FxButtons.createButton("Estimate parameters", FxIcons.LIGHTBULB,
+        "Derive wizard parameters from the same representative files used for optimization and "
+            + "show their statistics", this::estimateParametersFromFiles);
+    estimate.disableProperty().bind(parameterEstimationRunning);
+    final Button optimize = FxButtons.createButton("Optimize parameters", FxIcons.GRAPH_UP, null,
+        this::runOptimizer);
 
     instrumentComboBoxPane.getChildren()
         .addAll(createSpacer(), new Label("="), createSpacer(), createBatch, save, load,
-            localPresetsButton);
+            localPresetsButton, estimate, optimize);
 
     schemaPane = new HBox(0);
     schemaPane.setAlignment(Pos.CENTER);
 
     // advanced mode toggle switch
-    /*ToggleSwitch advancedToggle = new ToggleSwitch("Advanced mode");
+    ToggleSwitch advancedToggle = new ToggleSwitch("Advanced mode");
     advancedToggle.setTooltip(new Tooltip("Show or hide the advanced parameter customization tab"));
     advancedToggle.selectedProperty().bindBidirectional(advancedMode);
     advancedMode.addListener((_, _, _) -> {
@@ -466,7 +490,7 @@ public class BatchWizardTab extends SimpleTab {
         // When a preset is loaded the listeners are not enabled
         createParameterPanes();
       }
-    });*/
+    });
 
     // add a wrapper around the top pane with combo boxes and buttons so the overlay buttons do not overlap
     final HBox topPaneWrapper = FxLayout.newHBox(
@@ -478,12 +502,108 @@ public class BatchWizardTab extends SimpleTab {
         "Open the mzwizard documentation", () -> DesktopService.getDesktop()
             .openWebPage(MzioMZmineLinks.WIZARD_DOCUMENTATION.getUrl()));
     VBox topRightControls = FxLayout.newVBox(Pos.CENTER_RIGHT, FxLayout.DEFAULT_PADDING_INSETS,
-        help/*, advancedToggle*/);
+        help, advancedToggle);
     topRightControls.setPickOnBounds(false);
     final StackPane stackPane = new StackPane(controlSchemaPane, topRightControls);
     StackPane.setAlignment(topRightControls, Pos.TOP_RIGHT);
 
     return stackPane;
+  }
+
+  private void runOptimizer() {
+    updateAllParametersFromUi();
+    final WizardStepParameters importParam = sequenceSteps.get(DATA_IMPORT).get();
+    final @NotNull File[] allFiles = importParam.getParameter(DataImportWizardParameters.fileNames)
+        .getValue();
+    final File[] optimizerFiles = RawDataPreparation.selectOptimizerInputFiles(allFiles);
+
+    final var metadataFile = importParam.getOptionalValue(DataImportWizardParameters.metadataFile)
+        .orElse(null);
+
+    final OptimizerParameters optimizerParam = (OptimizerParameters) ConfigService.getConfiguration()
+        .getModuleParameters(OptimizerModule.class);
+    // inject wizard sequence so the parameter checklist shows only relevant solutions
+    final ExitCode exitCode = optimizerParam.showSetupDialog(true, sequenceSteps);
+    if (exitCode != ExitCode.OK) {
+      return;
+    }
+
+    final BatchOptimizationMainTask optimizer = new BatchOptimizationMainTask(
+        MemoryMapStorage.forRawDataFile(), Instant.now(), optimizerFiles,
+        metadataFile, this, optimizerParam);
+    TaskService.getController().addTask(optimizer);
+  }
+
+  private void estimateParametersFromFiles() {
+    if (parameterEstimationRunning.get()) {
+      return;
+    }
+    updateAllParametersFromUi();
+    final WizardStepParameters importParameters = sequenceSteps.get(DATA_IMPORT).orElse(null);
+    if (importParameters == null) {
+      DialogLoggerUtil.showErrorDialog("Cannot estimate parameters",
+          "The wizard has no data import step.");
+      return;
+    }
+
+    final File[] allFiles = importParameters.getValue(DataImportWizardParameters.fileNames);
+    if (allFiles == null || allFiles.length == 0) {
+      DialogLoggerUtil.showErrorDialog("Cannot estimate parameters",
+          "Select at least one raw data file in the Data Import step first.");
+      return;
+    }
+    final File[] estimateFiles = RawDataPreparation.selectOptimizerInputFiles(allFiles);
+
+    final File metadataFile = importParameters.getOptionalValue(
+        DataImportWizardParameters.metadataFile).orElse(null);
+    final WizardSequence sequenceSnapshot = copySequence(sequenceSteps);
+    final WizardParameterEstimationTask task = new WizardParameterEstimationTask(
+        MemoryMapStorage.forRawDataFile(), Instant.now(), estimateFiles, metadataFile,
+        sequenceSnapshot, this::applyParameterEstimationResult);
+    parameterEstimationRunning.set(true);
+    task.addTaskStatusListener((_, newStatus, _) -> {
+      if (!newStatus.isUnmodifiable()) {
+        return;
+      }
+      Platform.runLater(() -> {
+        parameterEstimationRunning.set(false);
+        if (newStatus == TaskStatus.ERROR) {
+          DialogLoggerUtil.showErrorDialog("Cannot estimate parameters", task.getErrorMessage());
+        }
+      });
+    });
+    TaskService.getController().addTask(task);
+  }
+
+  private void applyParameterEstimationResult(@NotNull WizardParameterEstimationResult result) {
+    // Preserve unrelated edits made while the background task was running.
+    updateAllParametersFromUi();
+    final boolean previousListenersActive = listenersActive;
+    setListenersActive(false);
+    try {
+      // decision: estimation replaces previous customization with the newly estimated overrides.
+      sequenceSteps.get(WizardPart.CUSTOMIZATION).ifPresent(WizardStepParameters::resetToDefaults);
+      result.estimates().applyEstimates(sequenceSteps);
+      advancedMode.set(sequenceSteps.get(WizardPart.CUSTOMIZATION)
+          .map(step -> step.getValue(CustomizationWizardParameters.overrides))
+          .map(overrides -> !overrides.isEmpty()).orElse(false));
+      createParameterPanes();
+    } finally {
+      setListenersActive(previousListenersActive);
+    }
+    MZmineCore.getDesktop().addTab(new SimpleTab("Data File Statistics",
+        new DataFileStatisticsDashboardPane(result.statistics(), result.interSampleRtStatistics(),
+            result.context().massDetectorType())));
+  }
+
+  private static @NotNull WizardSequence copySequence(@NotNull WizardSequence source) {
+    final WizardSequence copy = new WizardSequence();
+    for (final WizardStepParameters step : source) {
+      final WizardStepParameters stepCopy = step.getFactory().create();
+      ParameterUtils.copyParameters(step, stepCopy);
+      copy.add(stepCopy);
+    }
+    return copy;
   }
 
   /**
@@ -669,5 +789,9 @@ public class BatchWizardTab extends SimpleTab {
 
   public void setListenersActive(final boolean listenersActive) {
     this.listenersActive = listenersActive;
+  }
+
+  public WizardSequence getSequence() {
+    return sequenceSteps;
   }
 }

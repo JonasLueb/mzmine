@@ -404,6 +404,18 @@ public class RawDataFileImpl implements RawDataFile {
     return startTimeStamp;
   }
 
+  private io.github.mzmine.datamodel.AcquisitionMetadata acquisitionMetadata =
+      io.github.mzmine.datamodel.AcquisitionMetadata.EMPTY;
+
+  @Override public @NotNull io.github.mzmine.datamodel.AcquisitionMetadata getAcquisitionMetadata() {
+    return acquisitionMetadata;
+  }
+
+  @Override public void setAcquisitionMetadata(
+      final @NotNull io.github.mzmine.datamodel.AcquisitionMetadata metadata) {
+    acquisitionMetadata = metadata;
+  }
+
   public void setStartTimeStamp(@Nullable LocalDateTime startTimeStamp) {
     this.startTimeStamp = startTimeStamp;
   }

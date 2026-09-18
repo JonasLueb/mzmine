@@ -41,6 +41,7 @@ import io.github.mzmine.gui.chartbasics.graphicsexport.GraphicsExportParameters;
 import io.github.mzmine.gui.preferences.MZminePreferences;
 import io.github.mzmine.main.ConfigService;
 import io.github.mzmine.main.MZmineCore;
+import io.github.mzmine.modules.MZmineModule;
 import io.github.mzmine.modules.MZmineProcessingModule;
 import io.github.mzmine.modules.MZmineProcessingStep;
 import io.github.mzmine.modules.batchmode.BatchQueue;
@@ -52,6 +53,7 @@ import io.github.mzmine.modules.dataprocessing.align_join.JoinAlignerModule;
 import io.github.mzmine.modules.dataprocessing.align_join.JoinAlignerParameters;
 import io.github.mzmine.modules.dataprocessing.featdet_adapchromatogrambuilder.ADAPChromatogramBuilderParameters;
 import io.github.mzmine.modules.dataprocessing.featdet_adapchromatogrambuilder.ModularADAPChromatogramBuilderModule;
+import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.GeneralResolverParameters;
 import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.ResolvingDimension;
 import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.minimumsearch.MinimumSearchFeatureResolverModule;
 import io.github.mzmine.modules.dataprocessing.featdet_chromatogramdeconvolution.minimumsearch.MinimumSearchFeatureResolverParameters;
@@ -192,6 +194,7 @@ import io.github.mzmine.modules.visualization.projectmetadata.io.ProjectMetadata
 import io.github.mzmine.modules.visualization.projectmetadata.io.ProjectMetadataExportParameters.MetadataFileFormat;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.ParameterUtils;
+import io.github.mzmine.parameters.parametertypes.DoubleParameter;
 import io.github.mzmine.parameters.parametertypes.ImportType;
 import io.github.mzmine.parameters.parametertypes.IntensityNormalizer;
 import io.github.mzmine.parameters.parametertypes.MinimumFeaturesFilterParameters;
@@ -230,6 +233,7 @@ import io.github.mzmine.util.scans.similarity.SpectralSimilarityFunctions;
 import io.github.mzmine.util.scans.similarity.Weights;
 import io.github.mzmine.util.scans.similarity.impl.cosine.WeightedCosineSpectralSimilarityParameters;
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -613,6 +617,43 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
 
     q.add(new MZmineProcessingStepImpl<>(
         MZmineCore.getModuleInstance(MinimumSearchFeatureResolverModule.class), param));
+  }
+
+  protected void makeAndAddWaveletRtResolver(final BatchQueue q, int minDataPoints,
+      ResolvingDimension dimension, ParameterSet groupMs2Params) {
+    try {
+      ParameterSet param = (ParameterSet) Class.forName(
+              "io.mzio.mzminepro.modules.featdet_resolving.wavelet.WaveletResolverParameters")
+          .getDeclaredMethod("createLcTofDefault").invoke(null);
+
+      DoubleParameter minHeightParam = (DoubleParameter) param.getClass().getField("minHeight")
+          .get(null);
+      param.setParameter(minHeightParam, minFeatureHeight);
+
+      param.setParameter(GeneralResolverParameters.MIN_NUMBER_OF_DATAPOINTS, minDataPoints);
+      param.setParameter(GeneralResolverParameters.dimension, dimension);
+
+      // set MS2 grouping
+      param.setParameter(GeneralResolverParameters.groupMS2Parameters, groupMs2Params != null);
+      if (groupMs2Params != null) {
+        // the grouper parameterset might not be SUB set but the original one from the Grouper Module
+        var subParameterSet = param.getParameter(
+                MinimumSearchFeatureResolverParameters.groupMS2Parameters).getEmbeddedParameters()
+            .cloneParameterSet();
+        ParameterUtils.copyParameters(groupMs2Params, subParameterSet);
+
+        param.getParameter(MinimumSearchFeatureResolverParameters.groupMS2Parameters)
+            .setEmbeddedParameters((GroupMS2SubParameters) subParameterSet);
+      }
+
+      final MZmineModule module = MZmineCore.getModuleInstance(
+          "io.mzio.mzminepro.modules.featdet_resolving.wavelet.WaveletResolverModule");
+
+      q.add(new MZmineProcessingStepImpl<>((MZmineProcessingModule) module, param));
+    } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException |
+             NoSuchFieldException | ClassNotFoundException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   protected void makeAndAddDeisotopingStep(final BatchQueue q, final @Nullable RTTolerance rtTol) {
@@ -1474,8 +1515,8 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
 
     final LipidAnalysisType analysisType = switch (steps.get(WizardPart.ION_INTERFACE)
         .orElse(IonInterfaceWizardParameterFactory.UHPLC.create()).getFactory()) {
-      case IonInterfaceWizardParameterFactory.HPLC, IonInterfaceWizardParameterFactory.UHPLC ->
-          LipidAnalysisType.LC_REVERSED_PHASE;
+      case IonInterfaceWizardParameterFactory.HPLC, IonInterfaceWizardParameterFactory.UHPLC,
+           IonInterfaceWizardParameterFactory.LC_WAVELET -> LipidAnalysisType.LC_REVERSED_PHASE;
       case IonInterfaceWizardParameterFactory.HILIC -> LipidAnalysisType.LC_HILIC;
       case IonInterfaceWizardParameterFactory.DESI, IonInterfaceWizardParameterFactory.MALDI ->
           LipidAnalysisType.IMAGING;

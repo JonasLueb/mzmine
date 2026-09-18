@@ -76,6 +76,10 @@ public class CachedIMSRawDataFile implements IMSRawDataFile {
     file.getFrames().forEach(f -> cachedFrames.add(new CachedIMSFrame(f)));
   }
 
+  @Override public @NotNull io.github.mzmine.datamodel.AcquisitionMetadata getAcquisitionMetadata() {
+    return originalFile.getAcquisitionMetadata();
+  }
+
   @Override
   public @Nullable Frame getFrame(int frameNum) {
     return cachedFrames.get(frameNum);

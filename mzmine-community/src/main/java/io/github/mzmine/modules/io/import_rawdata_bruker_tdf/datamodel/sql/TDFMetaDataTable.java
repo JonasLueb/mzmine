@@ -167,6 +167,27 @@ public class TDFMetaDataTable extends TDFDataTable<String> {
     AcquisitionDateTime;
   }
 
+  /** Reuses parsed SQLite metadata; names and study fields are retained only inside mzmine. */
+  public @org.jetbrains.annotations.NotNull io.github.mzmine.datamodel.AcquisitionMetadata acquisitionMetadata(
+      final @org.jetbrains.annotations.NotNull java.util.Collection<Long> scanModes) {
+    final var fields = new java.util.LinkedHashMap<String, String>();
+    for (final Keys key : java.util.List.of(Keys.InstrumentName, Keys.AcquisitionSoftwareVersion,
+        Keys.SampleName, Keys.MethodName, Keys.Description)) {
+      final String value = getValueForKey(key);
+      if (value != null && !value.isBlank()) fields.put(key.name(), value);
+    }
+    final var terms = new java.util.ArrayList<>(io.github.mzmine.datamodel.AcquisitionMetadata.resolveLabel(
+        io.github.mzmine.datamodel.AcquisitionMetadata.Field.INSTRUMENT_MODEL,
+        getValueForKey(Keys.InstrumentName)));
+    // These native scan modes declare acquisition; MS1/MS2 presence alone never establishes DDA/DIA.
+    if (scanModes.contains(1L)) terms.addAll(io.github.mzmine.datamodel.AcquisitionMetadata.resolve("MS:1003221"));
+    if (scanModes.contains(9L)) terms.addAll(io.github.mzmine.datamodel.AcquisitionMetadata.resolve("MS:1003215"));
+    fields.put("Acquisition scan modes", scanModes.stream().distinct().sorted().map(mode ->
+        io.github.mzmine.modules.io.import_rawdata_bruker_tdf.datamodel.BrukerScanMode.fromScanMode(mode.intValue())
+            .getDescription() + " (" + mode + ")").collect(java.util.stream.Collectors.joining(", ")));
+    return new io.github.mzmine.datamodel.AcquisitionMetadata(terms, fields);
+  }
+
   public String getValueForKey(Keys key) {
     int index = keyCol.indexOf(key.toString());
     return index != -1 ? valueCol.get(index) : "";

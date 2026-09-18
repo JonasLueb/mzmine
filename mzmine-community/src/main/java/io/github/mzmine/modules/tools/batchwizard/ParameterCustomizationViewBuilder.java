@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2004-2026 The mzmine Development Team
+ *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -40,6 +41,7 @@ import io.github.mzmine.modules.tools.batchwizard.ParameterCustomizationModel.Ov
 import io.github.mzmine.modules.tools.batchwizard.subparameters.ApplicationScope;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.ParameterOverride;
 import io.github.mzmine.parameters.ParameterSet;
+import io.github.mzmine.parameters.ParameterUtils;
 import io.github.mzmine.parameters.UserParameter;
 import io.github.mzmine.parameters.parametertypes.HiddenParameter;
 import java.util.ArrayList;
@@ -549,8 +551,8 @@ public class ParameterCustomizationViewBuilder extends FxViewBuilder<ParameterCu
       String moduleClassName = selectedModule.getClass().getName();
       String moduleUniqueId = getModuleUniqueId(selectedModule.getClass());
       ApplicationScope scope = model.getSelectedScope();
-      final ParameterOverride added = new ParameterOverride(moduleClassName, moduleUniqueId,
-          param.cloneParameter(), scope);
+      final ParameterOverride added = new ParameterOverride(moduleClassName, moduleUniqueId, param,
+          param.getValue(), scope);
       model.getOverrides().put(new OverrideKey(selectedModule, param.getName(), scope), added);
       model.setSelectedOverride(added);
       model.setInstructionsText(
@@ -581,7 +583,8 @@ public class ParameterCustomizationViewBuilder extends FxViewBuilder<ParameterCu
     String paramName = override.parameterWithValue().getName();
     model.getOverrides().remove(new OverrideKey(moduleClass, paramName, override.scope()));
     model.getOverrides().put(new OverrideKey(moduleClass, paramName, newScope),
-        new ParameterOverride(moduleClass, override.moduleUniqueId(), override.parameterWithValue(),
+        ParameterOverride.fromParameter(moduleClass, override.moduleUniqueId(),
+            override.parameterWithValue(),
             newScope));
   }
 
@@ -746,8 +749,9 @@ public class ParameterCustomizationViewBuilder extends FxViewBuilder<ParameterCu
         .get(new OverrideKey(selectedModule, parameter.getName(), currentScope));
     if (temp != null) {
       try {
+        ParameterUtils.copyParameterValue(temp.parameterWithValue(), parameter);
         ((UserParameter<Object, Node>) parameter).setValueToComponent(currentEditorComponent,
-            temp.parameterWithValue().getValue());
+            parameter.getValue());
       } catch (Exception e) {
         // Ignore type mismatch -- the override value may not be compatible.
       }

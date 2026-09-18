@@ -19,6 +19,19 @@ class DeepLinkRouterTest {
   private static final UUID RESOURCE = UUID.fromString("73e1da13-92cf-4b30-8718-2f6762087618");
 
   @Test
+  void applicationConnectionLinkCarriesNoProjectOrAction() {
+    final DeepLink link = DeepLinkRouter.parse("mzmine://app/connection");
+    assertEquals(DeepLink.Destination.APP_CONNECTION, link.destination());
+    assertEquals(null, link.instanceId());
+    assertEquals(null, link.projectId());
+    for (final String suffix : new String[]{"?token=secret", "#apply", "/", "/shell"}) {
+      assertThrows(IllegalArgumentException.class, () -> DeepLinkRouter.parse("mzmine://app/connection" + suffix));
+    }
+    assertThrows(IllegalArgumentException.class, () -> DeepLinkRouter.parse(
+        "mzmine://navigate/" + INSTANCE + "/" + PROJECT + "/app-connection"));
+  }
+
+  @Test
   void parsesOpaqueFeatureTableTarget() {
     final DeepLink link = DeepLinkRouter.parse(
         "mzmine://navigate/" + INSTANCE + "/" + PROJECT + "/feature-table/" + RESOURCE);

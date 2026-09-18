@@ -163,6 +163,9 @@ public final class DeepLinkRouter {
     } catch (URISyntaxException ex) {
       throw new IllegalArgumentException("Invalid mzmine deep-link URI", ex);
     }
+    if ("mzmine://app/connection".equals(value)) {
+      return new DeepLink(null, null, DeepLink.Destination.APP_CONNECTION, Optional.empty());
+    }
     if (!"mzmine".equalsIgnoreCase(uri.getScheme()) || !"navigate".equals(uri.getHost())
         || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getUserInfo() != null
         || uri.getPort() != -1) {

@@ -57,6 +57,7 @@ public class MzMLParser {
   private static final Logger logger = Logger.getLogger(MzMLParser.class.getName());
 
   private final Vars vars;
+  private final MzMLAcquisitionMetadata acquisitionMetadata = new MzMLAcquisitionMetadata();
   private final TagTracker tracker;
   private final MemoryMapStorage storage;
   private final @NotNull ScanImportProcessorConfig scanProcessorConfig;
@@ -98,6 +99,7 @@ public class MzMLParser {
   public void processOpeningTag(XMLStreamReader xmlStreamReader, String openingTagName)
       throws IOException, DataFormatException, XMLStreamException {
     tracker.enter(openingTagName);
+    acquisitionMetadata.open(xmlStreamReader, openingTagName);
 
     if (tracker.current().contentEquals((MzMLTags.TAG_RUN))) {
       final String defaultInstrumentConfigurationRef = getRequiredAttribute(xmlStreamReader,
@@ -473,6 +475,8 @@ public class MzMLParser {
    * @param closingTagName  a {@link String} object.
    */
   public void processClosingTag(XMLStreamReader xmlStreamReader, String closingTagName) {
+    acquisitionMetadata.close(closingTagName);
+    if (closingTagName.equals("run")) newRawFile.setAcquisitionMetadata(acquisitionMetadata.result());
     tracker.exit(closingTagName);
 
     if (closingTagName.equals(MzMLTags.TAG_SPECTRUM)) {
