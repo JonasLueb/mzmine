@@ -319,6 +319,16 @@ public class BatchOptimizationMainTask extends AbstractTask {
           Math.max(baseline * factor, MIN_SHAPE_REJECTION_LIMIT));
     }
 
+    // decision: Current is scored through the batch evaluator directly, never through the search
+    // problem, because user values outside the search domain must remain exactly as entered.
+    final WizardSequence currentSequence = sequence;
+    final Solution currentSolution;
+    if (optimizationProblem.currentMatchesEstimate(currentSequence, singlePassSolution)) {
+      currentSolution = skippedCurrentSolution(singlePassSolution);
+    } else {
+      currentSolution = optimizationProblem.evaluateCurrentSequence(currentSequence);
+    }
+
     if (tab != null) {
       optimizationProblem.setEvaluationListener(_ -> {
         final OptimizationResultsController controller = resultsController.get();
@@ -381,9 +391,8 @@ public class BatchOptimizationMainTask extends AbstractTask {
     // A hard budget stop can interrupt a generation after some offspring were evaluated but before
     // the algorithm incorporated them. Build the result from every completed observation so those
     // expensive final batches cannot be lost.
-    final NondominatedPopulation result = new NondominatedPopulation();
-    result.addAll(optimizer.getResult());
-    result.addAll(optimizationProblem.getEvaluatedSolutions());
+    final NondominatedPopulation result = createSearchFront(optimizer.getResult(),
+        optimizationProblem.getEvaluatedSolutions());
 
     // log comparison: single-pass estimate versus the best optimizer result
     OptimizationResultLogger.logResults(singlePassSolution, singlePassEstimates,
@@ -391,7 +400,8 @@ public class BatchOptimizationMainTask extends AbstractTask {
     OptimizationResultLogger.logComparison(singlePassSolution, result,
         optimizationProblem.getEnabledMetrics());
 
-    outcome = new OptimizationOutcome(singlePassEstimates, singlePassSolution, result,
+    outcome = new OptimizationOutcome(singlePassEstimates, singlePassSolution, currentSequence,
+        currentSolution, result,
         optimizationProblem);
     completedResult.set(result);
     optimizationProblem.setEvaluationListener(null);
@@ -431,6 +441,30 @@ public class BatchOptimizationMainTask extends AbstractTask {
       stage.setHeight(Math.min(900d, screenHeight * 0.85d));
       stage.centerOnScreen();
     });
+  }
+
+  static @NotNull Solution skippedCurrentSolution(@NotNull Solution estimateSolution) {
+    final Solution current = estimateSolution.copy();
+    SolutionOrigin.CURRENT.applyTo(current);
+    current.setAttribute("Current baseline skipped", true);
+    return current;
+  }
+
+  static @NotNull NondominatedPopulation createSearchFront(
+      @NotNull Iterable<@NotNull Solution> optimizerResults,
+      @NotNull Iterable<@NotNull Solution> evaluatedSolutions) {
+    final NondominatedPopulation result = new NondominatedPopulation();
+    for (final Solution solution : optimizerResults) {
+      if (SolutionOrigin.of(solution) != SolutionOrigin.CURRENT) {
+        result.add(solution);
+      }
+    }
+    for (final Solution solution : evaluatedSolutions) {
+      if (SolutionOrigin.of(solution) != SolutionOrigin.CURRENT) {
+        result.add(solution);
+      }
+    }
+    return result;
   }
 
   /**

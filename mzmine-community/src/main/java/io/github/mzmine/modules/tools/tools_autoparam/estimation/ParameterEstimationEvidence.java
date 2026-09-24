@@ -22,6 +22,7 @@
 
 package io.github.mzmine.modules.tools.tools_autoparam.estimation;
 
+import io.github.mzmine.modules.tools.tools_autoparam.StatisticsPlotType;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.custom_parameters.WizardMassDetectorNoiseLevels;
 import io.github.mzmine.modules.tools.tools_autoparam.DataFileStatistics;
 import io.github.mzmine.parameters.parametertypes.tolerances.RTTolerance;
@@ -92,11 +93,42 @@ public record ParameterEstimationEvidence(@NotNull String basis, @NotNull String
     if (definition.equals(OptimizationParameterRegistry.MOBILITY_FWHM)) {
       return preset(parameter, "No mobility-width measurement is currently derived by this estimator.");
     }
-    if (definition.equals(OptimizationParameterRegistry.TOP_TO_EDGE)
-        || definition.equals(OptimizationParameterRegistry.CHROMATOGRAPHIC_THRESHOLD)) {
-      return heuristic(parameter, "Fixed heuristic for the selected resolver.");
+    if (definition.equals(OptimizationParameterRegistry.TOP_TO_EDGE)) {
+      return heuristic(parameter,
+          "Fixed starting ratio for the local minimum resolver. It requires a peak's top intensity to rise above its edge intensities by this ratio, helping reject small fluctuations. "
+              + "Keep it, edit it, or include it in separate optimization.");
+    }
+    if (definition.equals(OptimizationParameterRegistry.CHROMATOGRAPHIC_THRESHOLD)) {
+      return heuristic(parameter,
+          "Fixed starting percentile for the local minimum resolver. It excludes chromatogram points below the selected intensity percentile to suppress low-intensity background. "
+              + "Keep it, edit it, or include it in separate optimization.");
     }
     return originOnly(parameter);
+  }
+
+  /**
+   * Native plot types that directly support a parameter estimate. This keeps bounded review
+   * evidence tied to the same registry definitions as the estimators instead of display names.
+   */
+  public static @NotNull List<StatisticsPlotType> plotTypes(
+      final @NotNull ParameterDefinition<?> definition) {
+    if (definition.equals(OptimizationParameterRegistry.FWHM)
+        || definition.equals(OptimizationParameterRegistry.RT_CORRECTION)) {
+      return List.of(StatisticsPlotType.FWHM);
+    }
+    if (definition.equals(OptimizationParameterRegistry.MINIMUM_FEATURE_HEIGHT)) {
+      return List.of(StatisticsPlotType.LOWEST_ISOTOPE_HEIGHT);
+    }
+    if (definition.equals(OptimizationParameterRegistry.MINIMUM_CONSECUTIVE_SCANS)) {
+      return List.of(StatisticsPlotType.ISOTOPE_DATA_POINTS);
+    }
+    if (definition.equals(OptimizationParameterRegistry.MS1_NOISE)) {
+      return List.of(StatisticsPlotType.EDGE_INTENSITY);
+    }
+    if (definition.equals(OptimizationParameterRegistry.MZ_TOLERANCE)) {
+      return List.of(StatisticsPlotType.BEST_TOLERANCE_FREQUENCY);
+    }
+    return List.of();
   }
 
   public static @NotNull ParameterEstimationEvidence rtCorrection(
@@ -188,7 +220,7 @@ public record ParameterEstimationEvidence(@NotNull String basis, @NotNull String
   private static @NotNull ParameterEstimationEvidence heuristic(
       final @NotNull PreparedParameter<?> parameter, final @NotNull String explanation) {
     return new ParameterEstimationEvidence("heuristic", explanation, 0, "observations", Map.of(),
-        List.of("The initial value is not directly derived from measured data."));
+        List.of());
   }
 
   private static @NotNull ParameterEstimationEvidence preset(

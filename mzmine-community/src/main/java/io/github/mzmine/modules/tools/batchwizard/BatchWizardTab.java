@@ -61,6 +61,7 @@ import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerModule;
 import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerParameters;
 import io.github.mzmine.modules.visualization.projectmetadata.extract.SampleMetadataExtractionParameters;
 import io.github.mzmine.parameters.ParameterUtils;
+import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.dialogs.ParameterSetupPane;
 import io.github.mzmine.parameters.parametertypes.filenames.FileNamesComponent;
 import io.github.mzmine.parameters.parametertypes.filenames.LastFilesButton;
@@ -131,6 +132,8 @@ public class BatchWizardTab extends SimpleTab {
    */
   private final Map<File, LocalWizardSequenceFile> localPresets = new HashMap<>();
   private final Map<WizardStepParameters, @NotNull ParameterSetupPane> paramPaneMap = new HashMap<>();
+  private final Map<WizardStepParameters, ParameterSet> initialPaneValues = new HashMap<>();
+  private final Map<WizardStepParameters, ParameterSet> initialPaneRendering = new HashMap<>();
   private final List<Subscription> paramPaneSubscriptions = new ArrayList<>();
   private final Map<WizardPart, ComboBox<WizardStepParameters>> combos = new HashMap<>();
   private final List<WizardExtension> extensions;
@@ -141,6 +144,8 @@ public class BatchWizardTab extends SimpleTab {
   private boolean listenersActive = true;
   private TabPane tabPane;
   private HBox schemaPane;
+  private BorderPane mainPane;
+  private Node wizardToolbar;
 
   public BatchWizardTab() {
     super("mzwizard");
@@ -171,15 +176,16 @@ public class BatchWizardTab extends SimpleTab {
     centerScroll.setFitToWidth(true);
     centerScroll.setFitToHeight(true);
     createParameterPanes();
-    var mainPane = new BorderPane(centerScroll);
+    mainPane = new BorderPane(centerScroll);
     if (extensions.isEmpty()) {
-      mainPane.setTop(topPane);
+      wizardToolbar = topPane;
     } else {
       final VBox toolbar = new VBox(topPane);
       extensions.stream().map(WizardExtension::createControls).filter(java.util.Objects::nonNull)
           .forEach(toolbar.getChildren()::add);
-      mainPane.setTop(toolbar);
+      wizardToolbar = toolbar;
     }
+    mainPane.setTop(wizardToolbar);
     setContent(mainPane);
   }
 
@@ -191,6 +197,8 @@ public class BatchWizardTab extends SimpleTab {
     paramPaneSubscriptions.forEach(Subscription::unsubscribe);
     paramPaneSubscriptions.clear();
     paramPaneMap.clear();
+    initialPaneValues.clear();
+    initialPaneRendering.clear();
     int selectedIndex = tabPane.getSelectionModel().getSelectedIndex();
     // evaluate workflow and limit choices
     evaluateWizardSequenceLimitChoices();
@@ -311,6 +319,13 @@ public class BatchWizardTab extends SimpleTab {
   private Tab createParameterTab(final WizardStepParameters step) {
     ParameterSetupPane paramPane = new ParameterSetupPane(true, false, step);
     paramPaneMap.put(step, paramPane);
+    final var exact = step.getFactory().create();
+    ParameterUtils.copyParameters(step, exact);
+    initialPaneValues.put(step, exact);
+    final var rendered = step.getFactory().create();
+    ParameterUtils.copyParameters(step, rendered);
+    paramPane.updateParameterSetFromComponents(rendered);
+    initialPaneRendering.put(step, rendered);
     if (step instanceof DataImportWizardParameters dataImportParameters) {
       subscribeMetadataExtractionToImportFiles(dataImportParameters, paramPane);
     }
@@ -384,6 +399,11 @@ public class BatchWizardTab extends SimpleTab {
    * @param preset one preset per part
    */
   private void addToSchema(final WizardStepParameters preset) {
+    addToSchema(schemaPane, preset);
+  }
+
+  /** Adds one preset icon to a schema strip. */
+  private void addToSchema(@NotNull final HBox target, final WizardStepParameters preset) {
     String parent = preset.getUniquePresetId().toLowerCase();
     try {
       LocalDate now = LocalDate.now();
@@ -404,7 +424,7 @@ public class BatchWizardTab extends SimpleTab {
         view.setCacheHint(CacheHint.SPEED);
       }
 
-      schemaPane.getChildren().add(view);
+      target.getChildren().add(view);
     } catch (Exception ex) {
       logger.log(Level.WARNING, ex.getMessage());
     }
@@ -671,11 +691,13 @@ public class BatchWizardTab extends SimpleTab {
 
   /** A detached snapshot including edits still in the controls. Must be called on the FX thread. */
   public @NotNull WizardSequence snapshotSequence() {
-    updateAllParametersFromUi();
     final WizardSequence snapshot = new WizardSequence();
     for (final WizardStepParameters step : sequenceSteps) {
       final WizardStepParameters copy = step.getFactory().create();
       ParameterUtils.copyParameters(step, copy);
+      // Read controls into the detached copy without committing edits to the live model.
+      final ParameterSetupPane pane = paramPaneMap.get(step);
+      if (pane != null) ParameterUtils.copyParameters(readPaneValues(step, pane), copy);
       snapshot.add(copy);
     }
     return snapshot;
@@ -783,8 +805,28 @@ public class BatchWizardTab extends SimpleTab {
   /**
    * Updates the parameters in all steps from the UI components. Does not check for completeness.
    */
+  /** Preserve exact stored values while a native control still shows its original rendering. */
+  private @NotNull ParameterSet readPaneValues(final @NotNull WizardStepParameters step,
+      final @NotNull ParameterSetupPane pane) {
+    final var current = step.getFactory().create();
+    ParameterUtils.copyParameters(step, current);
+    pane.updateParameterSetFromComponents(current);
+    final var exact = initialPaneValues.get(step);
+    final var rendered = initialPaneRendering.get(step);
+    if (exact == null || rendered == null) return current;
+    for (final var parameter : current.getParameters()) {
+      if (!(parameter instanceof io.github.mzmine.parameters.UserParameter<?, ?>)) continue;
+      final var originalRendering = rendered.getNameParameterMap().get(parameter.getName());
+      if (originalRendering != null && parameter.valueEquals(originalRendering)) {
+        // decision: a formatter's rounding is not a scientific parameter edit.
+        ParameterUtils.copyParameterValue(exact.getNameParameterMap().get(parameter.getName()), parameter);
+      }
+    }
+    return current;
+  }
+
   private void updateAllParametersFromUi() {
-    paramPaneMap.values().forEach(ParameterSetupPane::updateParameterSetFromComponents);
+    paramPaneMap.forEach((step, pane) -> ParameterUtils.copyParameters(readPaneValues(step, pane), step));
   }
 
   public void setListenersActive(final boolean listenersActive) {

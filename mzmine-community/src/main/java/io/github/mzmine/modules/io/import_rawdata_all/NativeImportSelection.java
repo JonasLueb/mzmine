@@ -39,12 +39,20 @@ public final class NativeImportSelection {
    * folder discovery while still letting the user review and edit every import setting.
    */
   public static @NotNull Optional<PreparedImport> showDialog(final @NotNull ParameterSet initial) {
+    return showDialog(initial, _ -> {});
+  }
+
+  /** Retains the native import editor for a caller-controlled review handoff, without submitting. */
+  public static @NotNull Optional<PreparedImport> showDialog(final @NotNull ParameterSet initial,
+      final @NotNull java.util.function.Consumer<io.github.mzmine.parameters.dialogs.ParameterSetupDialog> reviewOpened) {
     if (!Platform.isFxApplicationThread()) {
       throw new IllegalStateException(
           "Native import selection must run on the JavaFX application thread.");
     }
     final ParameterSet dialogParameters = initial.cloneParameterSet();
-    if (dialogParameters.showSetupDialog(true) != ExitCode.OK) {
+    final ExitCode exitCode = dialogParameters instanceof AllSpectralDataImportParameters parameters
+        ? parameters.showSetupDialog(true, reviewOpened) : dialogParameters.showSetupDialog(true);
+    if (exitCode != ExitCode.OK) {
       return Optional.empty();
     }
     return Optional.of(new PreparedImport(dialogParameters));

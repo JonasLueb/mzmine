@@ -87,10 +87,12 @@ public final class RawDataPreparation {
     final MZmineProject project = ProjectService.getProject();
     MZmineCore.getModuleInstance(AllSpectralDataImportModule.class)
         .runModule(project, importParam, tasks, Instant.now());
-    TaskService.getController().addTasks(tasks.toArray(new Task[0]));
     final AtomicBoolean done = new AtomicBoolean(false);
+    // Register before submission. Already loaded files make the native import a fast no-op, so a
+    // listener registered afterwards can miss the terminal status transition and wait forever.
     AllTasksFinishedListener.registerCallbacks(tasks, false, () -> done.set(true),
         () -> done.set(true), () -> done.set(true));
+    TaskService.getController().addTasks(tasks.toArray(new Task[0]));
 
     while (!done.get()) {
       try {

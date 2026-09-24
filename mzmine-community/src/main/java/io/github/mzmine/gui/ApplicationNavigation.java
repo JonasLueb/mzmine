@@ -61,11 +61,7 @@ public final class ApplicationNavigation {
       final Window window = tab.getTabPane().getScene() == null ? null
           : tab.getTabPane().getScene().getWindow();
       if (window != null) {
-        if (window instanceof Stage stage) {
-          stage.setIconified(false);
-          stage.toFront();
-        }
-        window.requestFocus();
+        focusWindow(window);
         return;
       }
     }
@@ -74,9 +70,34 @@ public final class ApplicationNavigation {
 
   private static void focusMainWindow() {
     final Stage mainWindow = MZmineCore.getDesktop().getMainWindow();
-    mainWindow.setIconified(false);
-    mainWindow.toFront();
-    mainWindow.requestFocus();
+    if (mainWindow != null) focusWindow(mainWindow);
+  }
+
+  /** Bring a requested review to the foreground, including when another application is active. */
+  public static void focusWindow(final @NotNull Window window) {
+    requireFxThread();
+    if (DesktopService.isGUI() && java.awt.Desktop.isDesktopSupported()) {
+      final java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
+      if (desktop.isSupported(java.awt.Desktop.Action.APP_REQUEST_FOREGROUND)) {
+        try {
+          desktop.requestForeground(true);
+        } catch (final UnsupportedOperationException | SecurityException ignored) {
+          // Window focus remains available when the operating system refuses activation.
+        }
+      }
+    }
+    focusWindowNow(window);
+    Platform.runLater(() -> {
+      if (window.isShowing()) focusWindowNow(window);
+    });
+  }
+
+  private static void focusWindowNow(final @NotNull Window window) {
+    if (window instanceof Stage stage) {
+      stage.setIconified(false);
+      stage.toFront();
+    }
+    window.requestFocus();
   }
 
   private static void requireFxThread() {
