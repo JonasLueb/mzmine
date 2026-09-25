@@ -35,6 +35,7 @@ import io.github.mzmine.gui.DesktopService;
 import io.github.mzmine.gui.HeadLessDesktop;
 import io.github.mzmine.gui.MZmineDesktop;
 import io.github.mzmine.gui.MZmineGUI;
+import io.github.mzmine.gui.ShutDownHook;
 import io.github.mzmine.localbridge.DeepLinkRouter;
 import io.github.mzmine.gui.mainwindow.UsersTab;
 import io.github.mzmine.gui.preferences.MZminePreferences;
@@ -65,6 +66,7 @@ import io.github.mzmine.util.web.truststore.NativeTrustStoreManager;
 import io.mzio.events.AuthRequiredEvent;
 import io.mzio.events.EventService;
 import io.mzio.mzmine.startup.MZmineCoreArgumentParser;
+import io.mzio.mzmine.startup.MZmineExit;
 import io.mzio.users.gui.fx.LoginOptions;
 import io.mzio.users.gui.fx.UsersController;
 import io.mzio.users.user.CurrentUserService;
@@ -135,6 +137,9 @@ public final class MZmineCore {
    * called.
    */
   public void startUp(@NotNull final MZmineCoreArgumentParser argsParser) {
+    // register first so that GUI and headless (CLI) runs always clean up on exit
+    ShutDownHook.register();
+
     showStartupSplash(argsParser);
 
     NativeTrustStoreManager.initTrustStore();
@@ -211,11 +216,11 @@ public final class MZmineCore {
             }
             getDesktop().displayMessage(
                 "Requires user login. Open mzmine GUI and login to a user. Then provide the user file as command line argument -user path/user.mzuser");
-            System.exit(1);
+            MZmineExit.exit(1);
           } catch (Exception ex) {
             getDesktop().displayMessage(
                 "Requires user login. Open mzmine GUI and login to a user. Then provide the user file as command line argument -user path/user.mzuser");
-            System.exit(1);
+            MZmineExit.exit(1);
           }
         }
       }
@@ -286,7 +291,7 @@ public final class MZmineCore {
       if (CurrentUserService.isInvalid()) {
         logger.warning(
             "No valid user. Please login via the GUI or CLI or provide a user via command line argument -user path/user.mzuser");
-        System.exit(1);
+        MZmineExit.exit(1);
       }
     }
 
@@ -328,7 +333,7 @@ public final class MZmineCore {
     } catch (Throwable e) {
       StartupSplash.hide();
       logger.log(Level.SEVERE, "Could not launch mzmine GUI", e);
-      System.exit(1);
+      MZmineExit.exit(1);
     }
   }
 
@@ -347,9 +352,9 @@ public final class MZmineCore {
       Platform.exit();
     }
     if (batchTask != null && batchTask.isFinished()) {
-      System.exit(0);
+      MZmineExit.exit(0);
     } else {
-      System.exit(1);
+      MZmineExit.exit(1);
     }
   }
 

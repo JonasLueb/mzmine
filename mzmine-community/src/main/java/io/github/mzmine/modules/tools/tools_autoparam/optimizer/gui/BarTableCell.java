@@ -50,7 +50,6 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Callback;
-import org.jmol.c.HB;
 import org.moeaframework.core.Solution;
 
 public class BarTableCell extends TableCell<Solution, Number> {

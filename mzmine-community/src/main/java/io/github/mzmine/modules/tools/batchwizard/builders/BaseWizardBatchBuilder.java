@@ -78,9 +78,11 @@ import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMS2Module;
 import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMS2Parameters;
 import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMS2SubParameters;
 import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMs2AdvancedParameters;
+import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.AutomaticIsotopeFinderParameters;
+import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.CarbonModelAlgorithmParameters;
+import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.IsotopeFinderModeOptions;
 import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.IsotopeFinderModule;
 import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.IsotopeFinderParameters;
-import io.github.mzmine.modules.dataprocessing.filter_isotopefinder.IsotopeFinderParameters.ScanRange;
 import io.github.mzmine.modules.dataprocessing.filter_isotopegrouper.IsotopeGrouperModule;
 import io.github.mzmine.modules.dataprocessing.filter_isotopegrouper.IsotopeGrouperParameters;
 import io.github.mzmine.modules.dataprocessing.filter_rowsfilter.Isotope13CFilterParameters;
@@ -206,6 +208,7 @@ import io.github.mzmine.parameters.parametertypes.absoluterelative.AbsoluteAndRe
 import io.github.mzmine.parameters.parametertypes.absoluterelative.AbsoluteAndRelativeInt.Mode;
 import io.github.mzmine.parameters.parametertypes.combowithinput.ComboWithStringInputValue;
 import io.github.mzmine.parameters.parametertypes.combowithinput.FeatureLimitOptions;
+import io.github.mzmine.parameters.parametertypes.combowithinput.FieldSeparator;
 import io.github.mzmine.parameters.parametertypes.combowithinput.MsLevelFilter;
 import io.github.mzmine.parameters.parametertypes.combowithinput.MsLevelFilter.Options;
 import io.github.mzmine.parameters.parametertypes.combowithinput.RtLimitsFilter;
@@ -302,7 +305,7 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
     extractMetadataParams = getOptionalParameters(params,
         DataImportWizardParameters.extractMetadata).orElse(null);
     final Map<@NotNull SampleType, List<File>> groupedSamples = Arrays.stream(dataFiles)
-        .collect(Collectors.groupingBy(file -> SampleType.guessFromName(file.getName())));
+        .collect(Collectors.groupingBy(f -> SampleType.guessFromName(f.getName())));
     final @Nullable List<File> qcs = groupedSamples.get(SampleType.QC);
     batchHasQcs = qcs != null && qcs.size() >= 2;
 
@@ -468,7 +471,7 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
 
     param.setParameter(CSVExportModularParameters.featureLists,
         new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS));
-    param.setParameter(CSVExportModularParameters.fieldSeparator, ",");
+    param.setParameter(CSVExportModularParameters.fieldSeparator, FieldSeparator.COMMA);
     param.setParameter(CSVExportModularParameters.idSeparator, ";");
     param.setParameter(CSVExportModularParameters.omitEmptyColumns, true);
     param.setParameter(CSVExportModularParameters.filter, FeatureListRowsFilter.ALL);
@@ -750,9 +753,8 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
     param.setParameter(CorrelateGroupingParameters.PEAK_LISTS,
         new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS));
 
-    // for now we set this to keep as this was the initial state before handle original parameter was added
-    // some workflows depend on the inital feature list to be present
-    param.setParameter(CorrelateGroupingParameters.handleOriginal, OriginalFeatureListOption.KEEP);
+    // now that IonIdentity and IonNetwork and R2RMap are saved we can use REMOVE or user set
+    param.setParameter(CorrelateGroupingParameters.handleOriginal, handleOriginalFeatureLists);
 
     param.setParameter(CorrelateGroupingParameters.RT_TOLERANCE,
         Objects.requireNonNullElse(rtTol, new RTTolerance(9999999, Unit.MINUTES)));
@@ -1236,11 +1238,15 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
         batchHasQcs ? SampleTypeFilter.qc() : SampleTypeFilter.of(SampleType.QC, SampleType.SAMPLE);
 
     final RTCorrectionParameters scanRtParams = RTCorrectionParameters.create(
-        new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS),
-        mzTolInterSample,
-        new RTTolerance(interSampleRtTol.getToleranceInMinutes() * 2, Unit.MINUTES),
-        minFeatureHeight * 5, true, sampleTypeFilter, RTMeasure.MEDIAN,
-        RtCorrectionFunctions.MultiLinearCorrection, correctorParam);
+        new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS), //
+        mzTolInterSample, //
+        new RTTolerance(interSampleRtTol.getToleranceInMinutes() * 2, Unit.MINUTES), //
+        minFeatureHeight * 5, //
+        true, //
+        sampleTypeFilter, //
+        RTMeasure.MEDIAN, //
+        RtCorrectionFunctions.MultiLinearCorrection, //
+        correctorParam);
 
     q.add(new MZmineProcessingStepImpl<>(MZmineCore.getModuleInstance(ScanRtCorrectionModule.class),
         scanRtParams));
@@ -1343,12 +1349,14 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
 
     param.setParameter(IsotopeFinderParameters.featureLists,
         new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS));
-    param.setParameter(IsotopeFinderParameters.isotopeMzTolerance, mzTolFeaturesIntraSample);
-    param.setParameter(IsotopeFinderParameters.maxCharge, 1);
-    param.setParameter(IsotopeFinderParameters.scanRange, ScanRange.SINGLE_MOST_INTENSE);
-    param.setParameter(IsotopeFinderParameters.elements,
-        List.of(new Element("H"), new Element("C"), new Element("N"), new Element("O"),
-            new Element("S")));
+    // the automatic algorithm only needs the tolerance and the charge range, the rest defaults to
+    // H, C, N, O, S with the standard carbon-model envelope
+    final ParameterSet isoAlgorithm = param.getParameter(IsotopeFinderParameters.mode)
+        .setOptionGetParameters(IsotopeFinderModeOptions.AUTOMATIC);
+
+    AutomaticIsotopeFinderParameters.setAll(isoAlgorithm,
+        CarbonModelAlgorithmParameters.DEFAULT_REQUIRE_C13, mzTolScans,
+        CarbonModelAlgorithmParameters.DEFAULT_MAX_CHARGE);
 
     q.add(new MZmineProcessingStepImpl<>(MZmineCore.getModuleInstance(IsotopeFinderModule.class),
         param));
@@ -1462,8 +1470,8 @@ public abstract class BaseWizardBatchBuilder extends WizardBatchBuilder {
     param.setParameter(LocalCSVDatabaseSearchParameters.peakLists,
         new FeatureListsSelection(FeatureListsSelectionType.BATCH_LAST_FEATURELISTS));
     param.setParameter(LocalCSVDatabaseSearchParameters.dataBaseFile, csvLibraryFile);
-    param.setParameter(LocalCSVDatabaseSearchParameters.fieldSeparator,
-        csvLibraryFile.getName().toLowerCase().endsWith(".csv") ? "," : "\\t");
+    // the separator is detected from the file itself, no need to guess it from the extension
+    param.setParameter(LocalCSVDatabaseSearchParameters.fieldSeparator, FieldSeparator.AUTO);
     param.setParameter(LocalCSVDatabaseSearchParameters.extraColumns,
         new ComboWithStringInputValue<>(HandleExtraColumnsOptions.IGNORE, null));
     param.setParameter(LocalCSVDatabaseSearchParameters.filterSamples,
