@@ -1,0 +1,75 @@
+name: Formatter benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/formatter-benchmark/**'
+      - '.github/workflows/formatter-benchmark*.yml'
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+jobs:
+  prepare:
+    name: Prepare ${{ matrix.engine }} fixtures
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [eclipse, intellij]
+    uses: ./.github/workflows/formatter-benchmark-job.yml
+    with:
+      phase: prepare
+      engine: ${{ matrix.engine }}
+      repeat: 1
+  cold:
+    name: Cold ${{ matrix.engine }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [eclipse, intellij]
+    uses: ./.github/workflows/formatter-benchmark-job.yml
+    with:
+      phase: cold
+      engine: ${{ matrix.engine }}
+      repeat: 1
+  warm:
+    name: Warm ${{ matrix.engine }} ${{ matrix.repeat }}
+    needs: cold
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [eclipse, intellij]
+        repeat: [1, 2, 3]
+    uses: ./.github/workflows/formatter-benchmark-job.yml
+    with:
+      phase: warm
+      engine: ${{ matrix.engine }}
+      repeat: ${{ matrix.repeat }}
+  report:
+    name: Compare workflow durations
+    needs: [prepare, cold, warm]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: formatter-result-*
+          path: benchmark-results
+      - name: Build comparison
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/formatter-benchmark/report.py --results benchmark-results --output benchmark-report
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: formatter-comparison
+          path: benchmark-report
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14

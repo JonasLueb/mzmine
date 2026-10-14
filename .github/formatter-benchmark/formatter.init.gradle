@@ -1,0 +1,43 @@
+import groovy.json.JsonSlurper
+
+def configPath = System.getProperty('formatter.benchmark.config')
+if (configPath == null) {
+  throw new GradleException('formatter.benchmark.config is required')
+}
+def benchmark = new JsonSlurper().parse(new File(configPath))
+def fixtureFiles = benchmark.files.collect { new File(it).canonicalFile }
+
+gradle.beforeProject { project ->
+  if (project == gradle.rootProject && benchmark.engine == 'intellij') {
+    def idea = benchmark.ideaBinary
+    def profile = benchmark.ideaProfile
+    ['benchmarkIntellijApply', 'benchmarkIntellijCheck'].each { taskName ->
+      project.tasks.register(taskName, Exec) {
+        def arguments = [idea, 'format', '-s', profile, '-charset', 'UTF-8']
+        if (taskName == 'benchmarkIntellijCheck') {
+          arguments.add(2, '-d')
+        }
+        commandLine(arguments + fixtureFiles.collect { it.absolutePath })
+        outputs.upToDateWhen { false }
+      }
+    }
+  }
+}
+
+gradle.projectsEvaluated {
+  allprojects { project ->
+    project.tasks.matching { it.name in ['spotlessApply', 'spotlessCheck', 'spotlessJava', 'spotlessJavaApply', 'spotlessJavaCheck'] }.configureEach {
+      outputs.upToDateWhen { false }
+    }
+    if (benchmark.engine == 'eclipse') {
+      project.tasks.matching { it.name == 'spotlessJava' }.configureEach {
+        doLast {
+          def target = getTarget()
+          target.files.findAll { fixtureFiles.contains(it.canonicalFile) }.each {
+            println("FORMATTER_BENCHMARK_ECLIPSE_TARGET=${it.canonicalPath}")
+          }
+        }
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@
  */
 
 plugins {
+    id("com.diffplug.spotless") version "8.10.4" apply false
     `maven-publish`
 }
 
@@ -59,6 +60,21 @@ subprojects {
                         url = uri(layout.projectDirectory.dir("../local-repo/"))
                     }
                 }
+            }
+        }
+    }
+}
+
+// Keep the formatter and profile local to this build, including standalone CI builds.
+subprojects {
+    plugins.withId("java") {
+        apply(plugin = "com.diffplug.spotless")
+        configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+            // Fixed adoption baseline: formatting stays enforced after a branch is merged.
+            ratchetFrom("f0a1a8301ba0596064613d512692f25ec6660d36")
+            java {
+                target("src/*/java/**/*.java")
+                eclipse("4.41").configFile(rootProject.file("gradle/spotless/eclipse.xml"))
             }
         }
     }

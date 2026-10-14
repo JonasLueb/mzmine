@@ -1,0 +1,259 @@
+{
+  "baseline": "f0a1a8301ba0596064613d512692f25ec6660d36",
+  "idea_version": "2026.2.3",
+  "idea_linux_url": "https://download.jetbrains.com/idea/idea-2026.2.3.tar.gz",
+  "idea_linux_sha256": "68751c8ae4d49407251cd197df795fbed91b6fdc85d10c73c4649a99e496ab37",
+  "idea_profile": "mzmine-intellij-code-formater.xml",
+  "files": [
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/util/scans/similarity/Weights.java",
+      "sample": "sample0/Weights.java",
+      "sha256": "d35210bcb419283a490770fad5e012a1cc4cddd0e0b58e60d62f714c9f8ad09e"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/util/RawDataFileType.java",
+      "sample": "sample1/RawDataFileType.java",
+      "sha256": "9b81906206c94ec096e5d4eab09283ddd5cf2dab69ed712a72e0058fd38e53d2"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/chartbasics/simplechart/providers/MassSpectrumProvider.java",
+      "sample": "sample2/MassSpectrumProvider.java",
+      "sha256": "c133d17556032c70dbb765cbeb99bbda3fe1185a1f59ffed4d54ca496fc43517"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/tools/siriusapi/SiriusJobWaiterTask.java",
+      "sample": "sample3/SiriusJobWaiterTask.java",
+      "sha256": "63f3edf8dff5953cbee1111072baf34b2f5dad35d751d4b1c3ba72e922bfd69f"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/features/types/ListWithSubsType.java",
+      "sample": "sample4/ListWithSubsType.java",
+      "sha256": "1743596c549ddd24d9adce69dda90f8af5c2b5b583f9da73ae0da6593a14f94a"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/spectra/spectra_stack/SpectraStackVisualizerModule.java",
+      "sample": "sample5/SpectraStackVisualizerModule.java",
+      "sha256": "f8be60a4c628f587ffa43f935f55eebbf3c12f2abc324acb1d3566b36cbee703"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/featdet_smoothing/savitzkygolay/SavitzkyGolaySmoothing.java",
+      "sample": "sample6/SavitzkyGolaySmoothing.java",
+      "sha256": "72c3c5f563769156751e9ad15e4ede36f8694b7fedf01e1c7092e05aa515cd07"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/parameters/parametertypes/metadata/Metadata1GroupSelectionParameter.java",
+      "sample": "sample7/Metadata1GroupSelectionParameter.java",
+      "sha256": "21558591c2a119515db3d88eada392209a1254b088e26de4855d5dd76e4f3a98"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/util/color/SimpleColorPalette.java",
+      "sample": "sample8/SimpleColorPalette.java",
+      "sha256": "a0ed91d6ac35b36ec04a7e105f92bcd0c7112354638b436ef27ce34b627bfdbc"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/gapfill_peakfinder/GapDataPointImpl.java",
+      "sample": "sample9/GapDataPointImpl.java",
+      "sha256": "d841913ac7046a89a2f822c293a7f615cbc783526a2bfd1b61e08c751dc6a67d"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/mainwindow/introductiontab/IntroductionTabBuilder.java",
+      "sample": "sample10/IntroductionTabBuilder.java",
+      "sha256": "308c7c89e4d88ce93adafc1608bd8a060c244258be4d5d7bd6541ad7d41ee455"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/align_lcimage/LcImageAlignerTask.java",
+      "sample": "sample11/LcImageAlignerTask.java",
+      "sha256": "e2f1f32c462ef51d4f6bcf95ec8e142068f68feb3b5d6cb4ecac74b66403edf1"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/tools/output_analyze_logs/AnalyzeLogFileParameters.java",
+      "sample": "sample12/AnalyzeLogFileParameters.java",
+      "sha256": "d62f392db31b448f4c3f9305073da7db94e5efd51e58fa888aa3f3d6e95e99c7"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/chartbasics/gestures/ChartGestureEvent.java",
+      "sample": "sample13/ChartGestureEvent.java",
+      "sha256": "780652d196e8db6047fa105d19c1b916580bad2de0c6838cc0595cd86805e4b6"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/tools/fraggraphdashboard/spectrumplottable/NeutralLossAnnotation.java",
+      "sample": "sample14/NeutralLossAnnotation.java",
+      "sha256": "668341e202a3676f76358cc2c7a4a705aac85abfa1cd68f73091f28cbb400ebb"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataanalysis/compounddashboard/CompoundDashboardTab.java",
+      "sample": "sample15/CompoundDashboardTab.java",
+      "sha256": "713145c77c89c1761e1c30380a57d0d53f43168b42b85aeb4509a209dcc95d96"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/spectra/simplespectra/datapointprocessing/datamodel/ModuleSubCategory.java",
+      "sample": "sample16/ModuleSubCategory.java",
+      "sha256": "fa818351c28676f36023ba9843484883a597f9327b074317a7eb4317513e039b"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/io/export_features_sirius/SiriusExportModule.java",
+      "sample": "sample17/SiriusExportModule.java",
+      "sha256": "50f1792bddb8c249bd64ba7ce8d5fdd0df9286aa2fe9bee3ecad05c949850b33"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/tools/isotopepatternscore/IsotopePatternScoreCalculator.java",
+      "sample": "sample18/IsotopePatternScoreCalculator.java",
+      "sha256": "633e588902f46c2ed270234f217fdf40c15b508132a9367ae3c0dadbd74d201a"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/parameters/dialogs/ParameterSetupPane.java",
+      "sample": "sample19/ParameterSetupPane.java",
+      "sha256": "ce1cff4568509d419625f968020a9134d768fac3d3befa6901349065c76049c8"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/massvoltammogram/plot/MassvoltammogramPlotPanel.java",
+      "sample": "sample20/MassvoltammogramPlotPanel.java",
+      "sha256": "fe43a8b403f19c51394151bacbff715b99d8aa725a29203b72695a85d00519bd"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/features/types/otherdectectors/PolarityTypeType.java",
+      "sample": "sample21/PolarityTypeType.java",
+      "sha256": "997f31862f9ff2a460a6b8b410bd167b33c1862b6c09ca18ed1ab3366ebe97ba"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/parameters/parametertypes/row_type_filter/filters/SimpleStringRowTypeFilter.java",
+      "sample": "sample22/SimpleStringRowTypeFilter.java",
+      "sha256": "9703957c21e48e816080c25f8a17d5dc2376430dbfe47ef1baffeb42f6049edc"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/util/spectraldb/entry/SpectralDBAnnotation.java",
+      "sample": "sample23/SpectralDBAnnotation.java",
+      "sha256": "a66a6b66f0c672981a271dc34f84b2c225669ac7ba13e4649c81085afd07fa3c"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/id_isotopepeakscanner/IsotopePeakScannerParameters.java",
+      "sample": "sample24/IsotopePeakScannerParameters.java",
+      "sha256": "e50f443fcf4cb9abec4a115a7d705729e33b97c7afcf9386fc446fd35964917b"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/align_hierarchical/ClusteringProgression.java",
+      "sample": "sample25/ClusteringProgression.java",
+      "sha256": "770783a52a2689e20bb5816f835b95db48820ac60f744dcb0b9ef76b6b820a15"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/norm_rtcalibration/RTCorrectionParameters.java",
+      "sample": "sample26/RTCorrectionParameters.java",
+      "sha256": "d34a41b8ca947a140fd87b182cd081df9fc3260fd8c450f2c628e1eff5bd91c0"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/parameters/parametertypes/OptionForValuesComponent.java",
+      "sample": "sample27/OptionForValuesComponent.java",
+      "sha256": "545fceeaff8a9caae5519a8c7499845a8bc863d96952c25e2677af8baf33bc51"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/chartbasics/simplechart/providers/PaintScaleProvider.java",
+      "sample": "sample28/PaintScaleProvider.java",
+      "sha256": "de4d7d5c6e5d0f30048ed2dc2044178063c238661a00b020736b9ee4caf0a0e0"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/project/ProjectService.java",
+      "sample": "sample29/ProjectService.java",
+      "sha256": "220e1b30a261a43231125d42a4374958e41df0e505260ecd441a5481059dd4c5"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/group_compoundgrouper/edit/SplitCompoundRowParameters.java",
+      "sample": "sample30/SplitCompoundRowParameters.java",
+      "sha256": "1041337829b17733cd86a7d3654e27f4ba7defbac7fe25d1d93ea1945bec3df3"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/features/types/annotations/LipidSpectrumType.java",
+      "sample": "sample31/LipidSpectrumType.java",
+      "sha256": "99b631ce85fc871325155223decd8a84c9ef015a0e92c642c6813339e3a8e70b"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/io/export_scans_modular/ProjectMetadataToLibraryEntryMapper.java",
+      "sample": "sample32/ProjectMetadataToLibraryEntryMapper.java",
+      "sha256": "e4c03b193a7db4bfac6b2c9ad41feb88e0800a03fbe7020a84f18da2dfba6826"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/util/spectraldb/parser/LibraryParsingErrors.java",
+      "sample": "sample33/LibraryParsingErrors.java",
+      "sha256": "57af5d4ccf1646e5ac487815b9b0b67b2a56c81a20da3e28d40d638e08f00721"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/impl/SimpleDataPoint.java",
+      "sample": "sample34/SimpleDataPoint.java",
+      "sha256": "0cfa74dd28dd7985da883bea5a6a236fb55a5b74d5a27bbbe658cb329647a073"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/features/compoundlist/CompoundRowUtils.java",
+      "sample": "sample35/CompoundRowUtils.java",
+      "sha256": "171013ee1995903a4b3913d02225c8fa74d90aac248ab00301f98a2366bff006"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/massvoltammogram/plot/MassvoltammogramToolBar.java",
+      "sample": "sample36/MassvoltammogramToolBar.java",
+      "sha256": "91691eea9b7f50437b26cbea36dd0d5550eae35561d07e313c8bcbfc0066c40a"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/features/types/annotations/iin/SimpleIonIdentityListType.java",
+      "sample": "sample37/SimpleIonIdentityListType.java",
+      "sha256": "5a6c35e4d544f731a5c55e28908ab65b6267d214dd6a6a83ae6655c5f4c0107b"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/parameters/dialogs/previewpane/FeaturePreviewPane.java",
+      "sample": "sample38/FeaturePreviewPane.java",
+      "sha256": "7d33101e78f72226c2891db62e5fddcc871d3e3696c4123e6cc59bff7491e40b"
+    },
+    {
+      "source": "javafx-framework/src/main/java/io/github/mzmine/javafx/components/LabeledProgressBarCell.java",
+      "sample": "sample39/LabeledProgressBarCell.java",
+      "sha256": "7f398ab6747f2cfed8acd55014c34373e16154e0a5f2b6186bc45819291dc852"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/datamodel/identities/iontype/IonNetworkNode.java",
+      "sample": "sample40/IonNetworkNode.java",
+      "sha256": "bf755f988449919572e815ffc7485cf9a1a62568d896640967fffde1153bb430"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/rawdataoverview/RawDataFileInfoPaneController.java",
+      "sample": "sample41/RawDataFileInfoPaneController.java",
+      "sha256": "d7889569a302668962696a2d930f8c343a7f7fb989fc4490518be60b00f9a1e5"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/io/import_features_mztabm/MzTabmImportTask.java",
+      "sample": "sample42/MzTabmImportTask.java",
+      "sha256": "561b2706bb6f685944231eb2def50614f236892b546c1a0d23929f961eaad85a"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/chartbasics/simplechart/renderers/SelectableCategoryBarRenderer.java",
+      "sample": "sample43/SelectableCategoryBarRenderer.java",
+      "sha256": "f229b7735c10540765b50dac1f46422f48f4bf759e1383deae522802eadb81e7"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/spectra/simplespectra/renderers/ContinuousRenderer.java",
+      "sample": "sample44/ContinuousRenderer.java",
+      "sha256": "5b28d07785abe42e95df701009cd8e2ba4b497b508c22740dee1c25b51e5c495"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/gui/chartbasics/simplechart/providers/LabelTextProvider.java",
+      "sample": "sample45/LabelTextProvider.java",
+      "sha256": "531dee9b7bb591344c47a9aa7e4e610c0122e42771d12c4f752f56db8de71eac"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/visualization/spectra/simplespectra/mirrorspectra/MirrorScanModule.java",
+      "sample": "sample46/MirrorScanModule.java",
+      "sha256": "68194992bb66f6aecf7d41cd0478b413427a56e78bacd92aa7b2e457c918fa9b"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/id_lipidid/common/identification/matched_levels/species_level/SterolSpeciesLevelMatchedLipidFactory.java",
+      "sample": "sample47/SterolSpeciesLevelMatchedLipidFactory.java",
+      "sha256": "92b153987b20174d08ad40b35e9d929c5b07161d8bbaf356bb84aa6e303a5861"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/id_lipidid/annotation_modules/LipidAnnotationParameterSetupDialog.java",
+      "sample": "sample48/LipidAnnotationParameterSetupDialog.java",
+      "sha256": "0e0d8c5c19d861edf90e8283b60d8981e19d4521152581faebd4c39f2f0be8ed"
+    },
+    {
+      "source": "mzmine-community/src/main/java/io/github/mzmine/modules/dataprocessing/filter_rowsfilter/FoldChangeSignificanceRowFilter.java",
+      "sample": "sample49/FoldChangeSignificanceRowFilter.java",
+      "sha256": "a8156013f5dace65aa8c53bc83ed9f0d581057ff5e3fd2312f1d7edac819b8dc"
+    }
+  ]
+}

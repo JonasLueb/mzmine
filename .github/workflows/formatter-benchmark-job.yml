@@ -1,0 +1,103 @@
+name: Formatter benchmark job
+
+on:
+  workflow_call:
+    inputs:
+      phase:
+        required: true
+        type: string
+      engine:
+        required: true
+        type: string
+      repeat:
+        required: true
+        type: number
+
+jobs:
+  benchmark:
+    name: bench-${{ inputs.phase }}-${{ inputs.engine }}-${{ inputs.repeat }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      FORMATTER_PHASE: ${{ inputs.phase }}
+      FORMATTER_REPEAT: ${{ inputs.repeat }}
+      READ_MZIO_PACKAGES_USERNAME: ${{ github.actor }}
+      READ_MZIO_PACKAGES_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Initialize cache directories
+        run: |
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/formatter-gradle" >> "$GITHUB_ENV"
+          echo "FORMATTER_TOOLS_DIR=$RUNNER_TEMP/formatter-tools" >> "$GITHUB_ENV"
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '26.0.1'
+      - name: Restore formatter cache
+        if: ${{ inputs.phase == 'warm' }}
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.GRADLE_USER_HOME }}
+            ${{ env.FORMATTER_TOOLS_DIR }}
+          key: formatter-benchmark-v1-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.engine }}
+          fail-on-cache-miss: true
+      - name: Require exact warm cache
+        if: ${{ inputs.phase == 'warm' }}
+        env:
+          CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        run: test "$CACHE_HIT" = true
+      - name: Download canonical fixtures
+        if: ${{ inputs.phase != 'prepare' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: formatter-fixtures-${{ inputs.engine }}
+          path: ${{ runner.temp }}/formatter-fixtures
+      - name: Prepare canonical fixtures
+        if: ${{ inputs.phase == 'prepare' }}
+        env:
+          ENGINE: ${{ inputs.engine }}
+        run: >-
+          python3 .github/formatter-benchmark/run.py --phase prepare --engine "$ENGINE"
+          --fixtures "$RUNNER_TEMP/formatter-fixtures" --results "$RUNNER_TEMP/formatter-results"
+      - name: Run measured formatting check
+        if: ${{ inputs.phase != 'prepare' }}
+        env:
+          ENGINE: ${{ inputs.engine }}
+        run: >-
+          python3 .github/formatter-benchmark/run.py --phase check --engine "$ENGINE"
+          --fixtures "$RUNNER_TEMP/formatter-fixtures" --results "$RUNNER_TEMP/formatter-results"
+      - name: Save formatter cache
+        if: ${{ inputs.phase == 'cold' && success() }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.GRADLE_USER_HOME }}
+            ${{ env.FORMATTER_TOOLS_DIR }}
+          key: formatter-benchmark-v1-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.engine }}
+      - name: Upload canonical fixtures
+        if: ${{ inputs.phase == 'prepare' && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatter-fixtures-${{ inputs.engine }}
+          path: ${{ runner.temp }}/formatter-fixtures
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+      - name: Upload measurements and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatter-result-${{ inputs.phase }}-${{ inputs.engine }}-${{ inputs.repeat }}
+          path: ${{ runner.temp }}/formatter-results
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
