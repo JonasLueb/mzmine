@@ -30,6 +30,7 @@ import io.github.mzmine.datamodel.RawDataFile;
 import io.github.mzmine.datamodel.Scan;
 import io.github.mzmine.datamodel.features.FeatureList;
 import io.github.mzmine.datamodel.features.FeatureList.FeatureListAppliedMethod;
+import io.github.mzmine.datamodel.features.FeatureListRow;
 import io.github.mzmine.datamodel.features.ModularFeature;
 import io.github.mzmine.datamodel.features.ModularFeatureList;
 import io.github.mzmine.datamodel.features.ModularFeatureListRow;
@@ -47,6 +48,7 @@ import io.github.mzmine.datamodel.identities.iontype.project_io.IonNetworksLoade
 import io.github.mzmine.main.MZmineCore;
 import io.github.mzmine.modules.dataprocessing.filter_sortannotations.PreferredAnnotationRankingModule;
 import io.github.mzmine.modules.dataprocessing.filter_sortannotations.PreferredAnnotationRankingParameters;
+import io.github.mzmine.modules.dataprocessing.norm_intensity.IntensityNormalizerModule;
 import io.github.mzmine.modules.io.projectload.CachedIMSRawDataFile;
 import io.github.mzmine.modules.io.projectsave.FeatureListSaveTask;
 import io.github.mzmine.parameters.ParameterUtils;
@@ -507,10 +509,11 @@ public class FeatureListLoadTask extends AbstractTask {
   private ModularFeatureList createRows(MemoryMapStorage storage, File dataFile,
       File metadataFile) {
 
-    ModularFeatureList flist = readMetadataCreateFeatureList(metadataFile, storage);
+    final ModularFeatureList flist = readMetadataCreateFeatureList(metadataFile, storage);
     if (flist == null) {
       throw new IllegalStateException("Cannot create feature list.");
     }
+    final List<FeatureListRow> restoredRows = new ArrayList<>();
 
     try (InputStream fis = new FileInputStream(dataFile)) {
       final XMLInputFactory xif = XMLInputFactory.newInstance();
@@ -523,12 +526,22 @@ public class FeatureListLoadTask extends AbstractTask {
         final int type = reader.next();
         if (type == XMLEvent.START_ELEMENT && reader.getLocalName().equals(CONST.XML_ROW_ELEMENT)) {
           int id = Integer.parseInt(reader.getAttributeValue(null, idTypeUniqueID));
-          flist.addRow(new ModularFeatureListRow(flist, id));
+          restoredRows.add(new ModularFeatureListRow(flist, id));
         }
       }
     } catch (IOException | XMLStreamException e) {
       logger.log(Level.WARNING, e.getMessage(), e);
       return null;
+    }
+
+    // Saved IDs are existing identities, not new allocations. Restoration deliberately does not
+    // add a normalization-specific malformed-project policy.
+    flist.restoreRowsWithExactIds(restoredRows);
+    if (!flist.getPreferences().hasDefinedActiveIntensityNormalization()) {
+      // Legacy projects saved active functions only in applied-method history. Migrate once while
+      // loading; every later runtime caller reads preferences directly.
+      flist.setPreferences(flist.getPreferences().withActiveIntensityNormalization(
+          IntensityNormalizerModule.getLegacyNormalizationFromAppliedMethods(flist)));
     }
 
     logger.finest(
@@ -627,7 +640,6 @@ public class FeatureListLoadTask extends AbstractTask {
       flist.setDateCreated(
           metadataElement.getElementsByTagName(CONST.XML_FLIST_DATE_CREATED_ELEMENT).item(0)
               .getTextContent());
-      flist.getAppliedMethods().addAll(appliedMethods);
       selectedScansMap.forEach(flist::setSelectedScans);
 
       final FeatureListAppliedMethod preferredAnnoationSorting = ParameterUtils.getLatestModuleCall(
@@ -642,6 +654,7 @@ public class FeatureListLoadTask extends AbstractTask {
       if (preferences != null) {
         flist.setPreferences(preferences);
       }
+      flist.getAppliedMethods().addAll(appliedMethods);
       return flist;
     } catch (XPathExpressionException | ParserConfigurationException | SAXException |
              IOException e) {

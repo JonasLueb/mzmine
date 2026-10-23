@@ -25,9 +25,16 @@
 
 package io.github.mzmine.modules.tools.tools_autoparam.optimizer.execution;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.when;
+
 import io.github.mzmine.modules.tools.batchwizard.WizardPart;
 import io.github.mzmine.modules.tools.batchwizard.WizardSequence;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.IonInterfaceHplcWizardParameters;
+import io.github.mzmine.modules.tools.batchwizard.subparameters.DataImportWizardParameters;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.MassSpectrometerWizardParameters;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.WizardStepParameters;
 import io.github.mzmine.modules.tools.batchwizard.subparameters.custom_parameters.WizardMsPolarity;
@@ -50,7 +57,9 @@ import io.github.mzmine.modules.tools.tools_autoparam.preclassification.Preclass
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.taskcontrol.TaskStatus;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.IntSupplier;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -111,6 +120,21 @@ class WizardOptimizationProblemParameterTest {
   }
 
   @Test
+  void candidateKeepsTheInitialDataSettings() {
+    final WizardSequence sequence = fullSequence();
+    sequence.get(WizardPart.DATA_IMPORT).orElseThrow()
+        .setParameter(DataImportWizardParameters.extractMetadata, true);
+    final ParameterEstimationContext context = ParameterEstimationTestData.context(sequence);
+    final WizardOptimizationProblem problem = problem(context, PreparedParameterSet.prepare(context),
+        List.of(ParameterEstimationTestData.MINIMUM_FEATURE_HEIGHT));
+
+    final WizardSequence candidate = problem.createWizardSequenceFromSolution(problem.newSolution());
+
+    Assertions.assertTrue(candidate.get(WizardPart.DATA_IMPORT).orElseThrow()
+        .getValue(DataImportWizardParameters.extractMetadata));
+  }
+
+  @Test
   void noPolarityFilterKeepsTheWizardIonMode() {
     final ParameterEstimationContext context = context();
     final WizardOptimizationProblem problem = problem(context,
@@ -124,12 +148,56 @@ class WizardOptimizationProblemParameterTest {
     Assertions.assertEquals(WizardMsPolarity.Negative, msPolarity(wizard));
   }
 
+  @Test
+  void completedBatchProgressIncludesInitialUserSettingsOutsideTheSearchBudget() {
+    final ParameterEstimationContext context = context();
+    try (final var evaluators = mockConstruction(OptimizationBatchEvaluator.class,
+        (evaluator, _) -> when(evaluator.evaluate(any(), any(), anyBoolean(), any()))
+            .thenAnswer(invocation -> invocation.<IntSupplier>getArgument(3).getAsInt()));
+        final WizardOptimizationProblem problem = problem(context,
+            PreparedParameterSet.prepare(context),
+            List.of(ParameterEstimationTestData.MINIMUM_FEATURE_HEIGHT))) {
+      final Solution estimate = problem.newSolution();
+      problem.evaluate(estimate);
+      Assertions.assertEquals(1, problem.getCompletedBatchExecutionCount());
+
+      problem.evaluateInitialUserSettings(fullSequence());
+      Assertions.assertEquals(2, problem.getCompletedBatchExecutionCount());
+      Assertions.assertEquals(2, problem.getBatchExecutionCount());
+      Assertions.assertEquals(1, problem.getEvaluatedSolutions().size(),
+          "Initial user settings remain separate from optimizer observations");
+      Assertions.assertThrows(IllegalStateException.class,
+          () -> problem.evaluateInitialUserSettings(fullSequence()));
+      Assertions.assertEquals(2, problem.getBatchExecutionCount());
+
+      problem.evaluate(problem.newSolution());
+      Assertions.assertEquals(2, problem.getCompletedBatchExecutionCount(),
+          "A cached estimate does not execute another batch");
+      Assertions.assertEquals(2, problem.getBatchExecutionCount());
+      Assertions.assertEquals(1, problem.getSearchBatchExecutionCount());
+
+      doAnswer(invocation -> {
+        invocation.<IntSupplier>getArgument(3).getAsInt();
+        throw new IllegalStateException("Failed trial");
+      }).when(evaluators.constructed().getFirst()).evaluate(any(), any(), anyBoolean(), any());
+      final Solution failedTrial = problem.newSolution();
+      final var variable = (org.moeaframework.core.variable.RealVariable) failedTrial.getVariable(0);
+      variable.setValue(variable.getValue() == variable.getUpperBound()
+          ? variable.getLowerBound() : variable.getUpperBound());
+      Assertions.assertThrows(IllegalStateException.class,
+          () -> problem.evaluate(failedTrial));
+      Assertions.assertEquals(2, problem.getCompletedBatchExecutionCount());
+      Assertions.assertEquals(3, problem.getBatchExecutionCount());
+    }
+  }
+
   private static @NotNull WizardOptimizationProblem problem(
       @NotNull ParameterEstimationContext context, @NotNull PreparedParameterSet prepared,
       @NotNull List<ParameterDefinition<?>> selected) {
     final ParameterSet parameters = OptimizerParameters.create(
         List.of(OptimizationMetrics.IPO_ISOTOPE_SCORE), 30);
     parameters.setParameter(OptimizerParameters.paramToOptimize, selected);
+    parameters.setParameter(OptimizerParameters.evaluateInitialUserSettings, true);
     return new WizardOptimizationProblem(context, prepared, parameters,
         new AtomicReference<>(TaskStatus.PROCESSING), 30, () -> false);
   }
@@ -235,6 +303,58 @@ class WizardOptimizationProblemParameterTest {
         .getParameter(MassSpectrometerWizardParameters.sampleToSampleMzTolerance).valueEquals(
             evaluated.get(WizardPart.MS).orElseThrow()
                 .getParameter(MassSpectrometerWizardParameters.sampleToSampleMzTolerance)));
+  }
+
+  @Test
+  void applyingOnlyTheOptimizedParametersKeepsTheEstimatedWizardValues() {
+    final ParameterEstimationContext context = context();
+    final PreparedParameterSet prepared = PreparedParameterSet.prepare(context);
+    final List<ParameterDefinition<?>> selected = List.of(
+        ParameterEstimationTestData.MINIMUM_FEATURE_HEIGHT);
+    final WizardOptimizationProblem problem = problem(context, prepared, selected);
+
+    final Solution solution = problem.newSolution();
+    final RealVariable variable = (RealVariable) solution.getVariable(0);
+    variable.setValue((variable.getLowerBound() + variable.getUpperBound()) / 2);
+    final WizardSequence evaluated = problem.createWizardSequenceFromSolution(solution);
+
+    final WizardSequence untouched = context().sequence();
+    final WizardSequence wizard = context().sequence();
+    problem.applySolutionToWizard(solution, wizard, SolutionApplyMode.OPTIMIZED_ONLY);
+
+    boolean estimateDiffers = false;
+    for (final PreparedParameter<?> parameter : prepared.parameters()) {
+      if (!(parameter.definition() instanceof WizardParameterDefinition<?> definition)) {
+        continue;
+      }
+      final var applied = wizard.get(definition.part()).orElseThrow()
+          .getParameter(definition.parameter());
+      final var evaluatedValue = evaluated.get(definition.part()).orElseThrow()
+          .getParameter(definition.parameter());
+      if (selected.contains(definition)) {
+        Assertions.assertTrue(applied.valueEquals(evaluatedValue),
+            () -> definition.name() + " differs from the optimized value");
+        continue;
+      }
+      Assertions.assertTrue(applied.valueEquals(
+              untouched.get(definition.part()).orElseThrow().getParameter(definition.parameter())),
+          () -> definition.name() + " was changed although it was not optimized");
+      estimateDiffers |= !applied.valueEquals(evaluatedValue);
+    }
+    // otherwise the test cannot tell whether the estimates were skipped
+    Assertions.assertTrue(estimateDiffers);
+
+    final List<String> optimizedOnly = problem.describeAppliedValues(solution,
+        SolutionApplyMode.OPTIMIZED_ONLY);
+    Assertions.assertEquals(List.of(ParameterEstimationTestData.MINIMUM_FEATURE_HEIGHT.part() + ": "
+            + ParameterEstimationTestData.MINIMUM_FEATURE_HEIGHT.name() + " -> "
+                + problem.getIndexedParameters().getFirst().formatValue(solution) + " (Optimized)"),
+        optimizedOnly);
+    final List<String> all = problem.describeAppliedValues(solution,
+        SolutionApplyMode.ESTIMATED_AND_OPTIMIZED);
+    Assertions.assertEquals(optimizedOnly, all.subList(0, 1));
+    Assertions.assertEquals(prepared.estimates(Set.copyOf(selected)).size() + 1, all.size());
+    Assertions.assertTrue(all.stream().skip(1).allMatch(line -> line.endsWith("(Estimated)")));
   }
 
   @Test

@@ -362,7 +362,8 @@ public class MainWindowController {
     }));
     memoryUpdater.play();
 
-    final AcademicWorkspace academicWorkspace = new AcademicWorkspace();
+    final Workspace academicWorkspace = WorkspaceMenuHelper.getWorkspaces()
+        .getOrDefault(AcademicWorkspace.uniqueId, new AcademicWorkspace());
     WorkspaceMenuHelper.addWorkspace(academicWorkspace);
     if (WorkspaceMenuHelper.getDefaultWorkspaceId() == null) {
       WorkspaceMenuHelper.setDefaultWorkspace(academicWorkspace);
@@ -375,9 +376,7 @@ public class MainWindowController {
     logger.fine("Setting active workspace to " + workspace.getName());
     activeWorkspace = workspace;
     // rebuild the menu here, needed for updates after user changes
-    final var menu = workspace.buildMainMenu(tags);
-    ApplicationMenus.contribute(menu);
-    mainPane.setTop(menu);
+    mainPane.setTop(workspace.buildMainMenu(tags));
   }
 
   public Workspace getActiveWorkspace() {

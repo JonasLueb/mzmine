@@ -25,10 +25,14 @@
 package io.github.mzmine.modules.dataprocessing.norm_intensity;
 
 import io.github.mzmine.datamodel.utils.UniqueIdSupplier;
+import io.github.mzmine.datamodel.features.FeatureListRow;
 import io.github.mzmine.util.XMLUtils;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalDouble;
+import java.util.Set;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -37,7 +41,7 @@ import org.w3c.dom.Element;
  */
 public sealed interface NormalizationFunction extends UniqueIdSupplier permits
     CompositeNormalizationFunction, FactorNormalizationFunction, InterpolatedNormalizationFunction,
-    StandardCompoundNormalizationFunction {
+    StandardCompoundNormalizationFunction, FeatureRowNormalizationFunction {
 
   String XML_FUNCTION_ELEMENT = "normalizationFunction";
   String XML_FUNCTION_TYPE_ATTR = "type";
@@ -92,12 +96,36 @@ public sealed interface NormalizationFunction extends UniqueIdSupplier permits
     return this instanceof FactorNormalizationFunction;
   }
 
+  /** Whether resolving this function requires the identity of a feature-list row. */
+  default boolean isRowDependent() {
+    return false;
+  }
+
+  /** Row IDs embedded in this function and therefore reserved from later reuse. */
+  default @NotNull Set<Integer> protectedRowIds() {
+    return Set.of();
+  }
+
+  /** Fast single-ID check used by row allocators; implementations must not materialize all IDs. */
+  default boolean protectsRowId(final int rowId) {
+    return false;
+  }
+
   /**
    * @param mz the mz of the feature
    * @param rt the rt of the feature
    * @return A factor to multiply area/height with to get normalized values.
    */
   double getNormalizationFactor(@NotNull Double mz, @NotNull Float rt);
+
+  /**
+   * Resolves a factor in feature-row context. Empty means that this row was not covered by the
+   * stored function and must remain without normalized values.
+   */
+  default @NotNull OptionalDouble getNormalizationFactor(@Nullable final FeatureListRow row,
+      @NotNull final Double mz, @NotNull final Float rt) {
+    return OptionalDouble.of(getNormalizationFactor(mz, rt));
+  }
 
   void saveToXML(@NotNull Element functionElement);
 
@@ -120,6 +148,8 @@ public sealed interface NormalizationFunction extends UniqueIdSupplier permits
       case InterpolatedNormalizationFunction.XML_TYPE ->
           InterpolatedNormalizationFunction.loadFromXML(functionElement);
       case CompositeNormalizationFunction.XML_TYPE -> CompositeNormalizationFunction.loadFromXML(functionElement);
+      case FeatureRowNormalizationFunction.XML_TYPE ->
+          FeatureRowNormalizationFunction.loadFromXML(functionElement);
       default -> throw new IllegalArgumentException(
           "Unsupported normalization function type: " + functionType);
     };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2024 The MZmine Development Team
+ * Copyright (c) 2004-2026 The mzmine Development Team
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,8 +27,8 @@ package io.github.mzmine.modules.io.import_rawdata_mzml.msdk.data;
 
 import com.google.common.collect.ImmutableList;
 import io.github.msdk.datamodel.Chromatogram;
-import io.github.mzmine.datamodel.AcquisitionMetadata;
 import io.github.msdk.datamodel.FileType;
+import io.github.mzmine.modules.io.import_rawdata_mzml.msdk.data.header.MzMLHeaderMetadata;
 import java.io.File;
 import java.util.List;
 import java.util.Optional;
@@ -42,16 +42,6 @@ public class MzMLRawDataFile {
   private static final @NotNull FileType fileType = FileType.MZML;
 
   private final File sourceFile;
-  private AcquisitionMetadata acquisitionMetadata = AcquisitionMetadata.EMPTY;
-
-  public @NotNull AcquisitionMetadata getAcquisitionMetadata() {
-    return acquisitionMetadata;
-  }
-
-  public void setAcquisitionMetadata(final @NotNull AcquisitionMetadata acquisitionMetadata) {
-    this.acquisitionMetadata = acquisitionMetadata;
-  }
-
   private final @NotNull List<String> msFunctions;
   /**
    * each element is one frame with all its mobility scans
@@ -67,6 +57,7 @@ public class MzMLRawDataFile {
   private @NotNull String defaultDataProcessingScan;
   private @NotNull String defaultDataProcessingChromatogram;
   private @NotNull String startTimeStamp;
+  private final @NotNull MzMLHeaderMetadata headerMetadata = new MzMLHeaderMetadata();
 
   private @NotNull String name;
 
@@ -142,6 +133,13 @@ public class MzMLRawDataFile {
 
   public void setStartTimeStamp(String startTimeStamp) {
     this.startTimeStamp = startTimeStamp;
+  }
+
+  /**
+   * @return file level metadata of the mzML header
+   */
+  public @NotNull MzMLHeaderMetadata getHeaderMetadata() {
+    return headerMetadata;
   }
 
   public String getDefaultDataProcessingScan() {

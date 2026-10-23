@@ -29,10 +29,20 @@ import static io.github.mzmine.modules.dataprocessing.norm_intensity.NormIntensi
 import static io.github.mzmine.modules.dataprocessing.norm_intensity.NormIntensityTestUtils.createRawFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 
 import io.github.mzmine.datamodel.AbundanceMeasure;
 import io.github.mzmine.datamodel.features.ModularFeature;
 import io.github.mzmine.datamodel.features.ModularFeatureList;
+import io.github.mzmine.datamodel.features.SimpleFeatureListAppliedMethod;
+import io.github.mzmine.datamodel.features.types.DataTypes;
 import io.github.mzmine.datamodel.features.types.numbers.NormalizedAreaType;
 import io.github.mzmine.datamodel.features.types.numbers.NormalizedHeightType;
 import io.github.mzmine.parameters.ParameterSet;
@@ -42,9 +52,17 @@ import io.github.mzmine.parameters.parametertypes.selectors.FeatureListsSelectio
 import io.github.mzmine.project.impl.MZmineProjectImpl;
 import io.github.mzmine.project.impl.RawDataFileImpl;
 import io.github.mzmine.taskcontrol.TaskStatus;
+import io.github.mzmine.util.FeatureListUtils;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.MockedStatic;
 
 class IntensityNormalizerTaskTest {
 
@@ -186,6 +204,15 @@ class IntensityNormalizerTaskTest {
 
     final ModularFeatureList featureList = new ModularFeatureList("flist", null, s1, s2);
     addRow(featureList, 1, s1, 2f, s2, 1f);
+    featureList.addFeatureType(DataTypes.get(NormalizedHeightType.class));
+    featureList.addFeatureType(DataTypes.get(NormalizedAreaType.class));
+    featureList.streamFeatures().forEach(feature -> {
+      feature.set(NormalizedHeightType.class, 31f);
+      feature.set(NormalizedAreaType.class, 41f);
+    });
+    featureList.setPreferences(featureList.getPreferences().withActiveIntensityNormalization(
+        new IntensityNormalizationSummary(List.of(
+            new RawFileNormalizationFunction(s1, new FactorNormalizationFunction(2d))))));
 
     final MZmineProjectImpl project = new MZmineProjectImpl();
     project.addFeatureList(featureList);
@@ -195,9 +222,193 @@ class IntensityNormalizerTaskTest {
     task.run();
 
     assertEquals(TaskStatus.ERROR, task.getStatus());
+    assertTrue(featureList.streamFeatures().allMatch(feature ->
+        Float.valueOf(31f).equals(feature.get(NormalizedHeightType.class))));
+    assertEquals(1, featureList.getPreferences().getActiveIntensityNormalization().functions().size());
+  }
+
+  @Test
+  void processInPlaceCancellationBeforeRunPreservesExistingNormalization() {
+    final RawDataFileImpl qc1 = createRawFile("qc_1", LocalDateTime.of(2026, 1, 1, 10, 0));
+    final RawDataFileImpl qc2 = createRawFile("qc_2", LocalDateTime.of(2026, 1, 1, 10, 5));
+    final ModularFeatureList source = new ModularFeatureList("flist", null, qc1, qc2);
+    addRow(source, 1, qc1, 2f, qc2, 8f);
+    addRow(source, 2, qc1, 6f, qc2, 8f);
+    source.addFeatureType(DataTypes.get(NormalizedHeightType.class));
+    source.addFeatureType(DataTypes.get(NormalizedAreaType.class));
+    source.streamFeatures().forEach(feature -> {
+      feature.set(NormalizedHeightType.class, 77f);
+      feature.set(NormalizedAreaType.class, 88f);
+    });
+    final MZmineProjectImpl project = new MZmineProjectImpl();
+    project.addFeatureList(source);
+    final IntensityNormalizerTask task = new IntensityNormalizerTask(project, source,
+        buildParams(AbundanceMeasure.Height, OriginalFeatureListOption.PROCESS_IN_PLACE), null,
+        Instant.now());
+    task.cancel();
+
+    task.run();
+
+    assertEquals(TaskStatus.CANCELED, task.getStatus());
+    assertTrue(source.streamFeatures().allMatch(feature ->
+        Float.valueOf(77f).equals(feature.get(NormalizedHeightType.class))));
+    assertTrue(source.streamFeatures().allMatch(feature ->
+        Float.valueOf(88f).equals(feature.get(NormalizedAreaType.class))));
+    assertEquals(2f, source.getFeature(0, qc1).getHeight());
+    assertEquals(8f, source.getFeature(0, qc2).getHeight());
+    assertEquals(0, source.getAppliedMethods().size());
+    assertEquals(1, project.getCurrentFeatureLists().size());
+  }
+
+  @Test
+  void cancellationImmediatelyBeforeApplicationPreservesValuesPreferencesAndHistory() {
+    final ModularFeatureList source = previouslyNormalizedList();
+    final MZmineProjectImpl project = new MZmineProjectImpl();
+    project.addFeatureList(source);
+    final ParameterSet parameters = spy(buildParams(AbundanceMeasure.Height,
+        OriginalFeatureListOption.PROCESS_IN_PLACE));
+    final IntensityNormalizerTask task = new IntensityNormalizerTask(project, source, parameters,
+        null, Instant.now());
+    final AtomicBoolean functionsCalculated = new AtomicBoolean();
+    // History is prepared after all functions are calculated, just before application.
+    doAnswer(invocation -> {
+      assertPreviousNormalization(source);
+      functionsCalculated.set(true);
+      task.cancel();
+      return invocation.callRealMethod();
+    }).when(parameters).cloneParameterSet(true);
+
+    task.run();
+
+    assertTrue(functionsCalculated.get());
+    assertEquals(TaskStatus.CANCELED, task.getStatus());
+    assertPreviousNormalization(source);
+    assertEquals(List.of(source), project.getCurrentFeatureLists());
+    assertEquals("flist", source.getName());
+  }
+
+  @ParameterizedTest
+  @EnumSource(OriginalFeatureListOption.class)
+  void cancellationDuringApplicationCompletesValuesAndMetadataWithoutPublishing(
+      @NotNull final OriginalFeatureListOption handling) {
+    final ModularFeatureList source = previouslyNormalizedList();
+    source.getFeature(1, source.getRawDataFile(1)).setArea(Float.NaN);
+    final MZmineProjectImpl project = new MZmineProjectImpl();
+    project.addFeatureList(source);
+    final IntensityNormalizerTask task = new IntensityNormalizerTask(project, source,
+        buildParams(AbundanceMeasure.Height, handling), null, Instant.now());
+    final AtomicBoolean canceledDuringApplication = new AtomicBoolean();
+    final AtomicReference<ModularFeatureList> destination = new AtomicReference<>();
+    if (handling.isProcessInPlace()) {
+      destination.set(source);
+      cancelOnFirstNormalizedValue(source, task, canceledDuringApplication);
+    }
+
+    // Observe the real output copy before it becomes visible in the project.
+    try (final MockedStatic<FeatureListUtils> copies = mockStatic(FeatureListUtils.class,
+        CALLS_REAL_METHODS)) {
+      copies.when(() -> FeatureListUtils.createCopy(source, "norm", null, true))
+          .thenAnswer(invocation -> {
+            final ModularFeatureList copy = (ModularFeatureList) invocation.callRealMethod();
+            assertPreviousNormalization(copy);
+            destination.set(copy);
+            cancelOnFirstNormalizedValue(copy, task, canceledDuringApplication);
+            return copy;
+          });
+      task.run();
+    }
+
+    assertTrue(canceledDuringApplication.get());
+    assertEquals(TaskStatus.CANCELED, task.getStatus());
+    assertEquals(List.of(source), project.getCurrentFeatureLists());
+    assertEquals("flist", source.getName());
+    final ModularFeatureList output = destination.get();
+    assertNotNull(output);
+    if (handling.isProcessInPlace()) {
+      assertSame(source, output);
+    } else {
+      assertNotSame(source, output);
+      assertPreviousNormalization(source);
+    }
+
+    final float[][] expected = {{3f, 6f}, {9f, 6f}};
+    final float[][] raw = {{2f, 8f}, {6f, 8f}};
+    for (int row = 0; row < 2; row++) {
+      for (int file = 0; file < 2; file++) {
+        final ModularFeature feature = output.getFeature(row, output.getRawDataFile(file));
+        assertEquals(raw[row][file], feature.getHeight());
+        assertEquals(expected[row][file], feature.get(NormalizedHeightType.class));
+        if (row == 1 && file == 1) {
+          assertNull(feature.getArea());
+          assertNull(feature.get(NormalizedAreaType.class));
+        } else {
+          assertEquals(raw[row][file], feature.getArea());
+          assertEquals(expected[row][file], feature.get(NormalizedAreaType.class));
+        }
+      }
+    }
+    assertEquals(2, output.getAppliedMethods().size());
+    assertEquals(Instant.EPOCH, output.getAppliedMethods().getFirst().getModuleCallDate());
+    assertEquals(task.getModuleCallDate(), output.getAppliedMethods().getLast().getModuleCallDate());
+    final IntensityNormalizationSummary active = output.getPreferences()
+        .getActiveIntensityNormalization();
+    final IntensityNormalizationSummary history = output.getAppliedMethods().getLast()
+        .getParameters().getValue(IntensityNormalizerParameters.hiddenNormalizationSummary);
+    assertEquals(active.functions(), history.functions());
+    assertEquals(new FactorNormalizationFunction(1.5d), output.getPreferences()
+        .getActiveNormalizationFunction(output.getRawDataFile(0)).orElseThrow());
+    assertEquals(new FactorNormalizationFunction(.75d), output.getPreferences()
+        .getActiveNormalizationFunction(output.getRawDataFile(1)).orElseThrow());
   }
 
   // --- helpers ---
+
+  private static @NotNull ModularFeatureList previouslyNormalizedList() {
+    final RawDataFileImpl qc1 = createRawFile("qc_1", LocalDateTime.of(2026, 1, 1, 10, 0));
+    final RawDataFileImpl qc2 = createRawFile("qc_2", LocalDateTime.of(2026, 1, 1, 10, 5));
+    final ModularFeatureList source = new ModularFeatureList("flist", null, qc1, qc2);
+    addRow(source, 1, qc1, 2f, qc2, 8f);
+    addRow(source, 2, qc1, 6f, qc2, 8f);
+    source.streamFeatures().forEach(feature -> {
+      feature.set(NormalizedHeightType.class, 77f);
+      feature.set(NormalizedAreaType.class, 88f);
+    });
+    final IntensityNormalizationSummary previous = new IntensityNormalizationSummary(List.of(
+        new RawFileNormalizationFunction(qc1, new FactorNormalizationFunction(9d)),
+        new RawFileNormalizationFunction(qc2, new FactorNormalizationFunction(9d))));
+    source.setPreferences(source.getPreferences().withActiveIntensityNormalization(previous));
+    final ParameterSet previousParameters = buildParams(AbundanceMeasure.Height,
+        OriginalFeatureListOption.PROCESS_IN_PLACE);
+    previousParameters.setParameter(IntensityNormalizerParameters.hiddenNormalizationSummary,
+        previous);
+    source.addDescriptionOfAppliedTask(new SimpleFeatureListAppliedMethod(
+        IntensityNormalizerModule.class, previousParameters, Instant.EPOCH));
+    return source;
+  }
+
+  private static void assertPreviousNormalization(@NotNull final ModularFeatureList list) {
+    list.streamFeatures().forEach(feature -> {
+      assertEquals(77f, feature.get(NormalizedHeightType.class));
+      assertEquals(88f, feature.get(NormalizedAreaType.class));
+    });
+    assertEquals(1, list.getAppliedMethods().size());
+    assertEquals(Instant.EPOCH, list.getAppliedMethods().getFirst().getModuleCallDate());
+    assertEquals(2, list.getPreferences().getActiveIntensityNormalization().functions().size());
+    for (final var file : list.getRawDataFiles()) {
+      assertEquals(new FactorNormalizationFunction(9d), list.getPreferences()
+          .getActiveNormalizationFunction(file).orElseThrow());
+    }
+  }
+
+  private static void cancelOnFirstNormalizedValue(@NotNull final ModularFeatureList list,
+      @NotNull final IntensityNormalizerTask task, @NotNull final AtomicBoolean canceled) {
+    list.addFeatureTypeValueListener(DataTypes.get(NormalizedAreaType.class),
+        (model, type, oldValue, newValue) -> {
+          if (newValue != null && canceled.compareAndSet(false, true)) {
+            task.cancel();
+          }
+        });
+  }
 
   private static float featureNormalizedHeight(ModularFeatureList list, int rowIndex,
       RawDataFileImpl file) {

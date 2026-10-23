@@ -38,14 +38,19 @@ import io.github.mzmine.modules.dataprocessing.align_common.BaseFeatureListAlign
 import io.github.mzmine.modules.dataprocessing.align_common.FeatureCloner.SimpleFeatureCloner;
 import io.github.mzmine.modules.dataprocessing.align_join.JoinAlignerParameters;
 import io.github.mzmine.modules.dataprocessing.align_join.JoinRowAlignScorer;
+import io.github.mzmine.modules.tools.batchwizard.WizardPart;
+import io.github.mzmine.modules.tools.batchwizard.WizardSequence;
+import io.github.mzmine.modules.tools.batchwizard.subparameters.WizardStepParameters;
+import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.IonInterfaceWizardParameterFactory;
+import io.github.mzmine.modules.tools.batchwizard.subparameters.factories.IonIterfaceGroup;
 import io.github.mzmine.modules.tools.tools_autoparam.statistics.DataFileStatistics;
 import io.github.mzmine.modules.tools.tools_autoparam.statistics.FeatureStatistics;
 import io.github.mzmine.modules.tools.tools_autoparam.statistics.FeatureWithIsotopeTraces;
 import io.github.mzmine.modules.tools.tools_autoparam.statistics.MzToleranceSearchOptions;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.parametertypes.tolerances.MZTolerance;
-import io.github.mzmine.parameters.parametertypes.tolerances.RTTolerance.Unit;
 import io.github.mzmine.parameters.parametertypes.tolerances.RTTolerance;
+import io.github.mzmine.parameters.parametertypes.tolerances.RTTolerance.Unit;
 import io.github.mzmine.parameters.parametertypes.tolerances.mobilitytolerance.MobilityTolerance;
 import io.github.mzmine.taskcontrol.SimpleRunnableTask;
 import io.github.mzmine.taskcontrol.Task;
@@ -58,8 +63,8 @@ import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -68,7 +73,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Raw measurements only. Cross-file alignment runs once, before parameter preparation.
+ * Raw measurements only. Cross-file alignment is derived from the active feature pool before
+ * parameter preparation.
  */
 public record RawDataAnalysis(@NotNull List<DataFileStatistics> files, double @NotNull [] fwhms,
                               double @NotNull [] consecutiveScans,
@@ -98,7 +104,7 @@ public record RawDataAnalysis(@NotNull List<DataFileStatistics> files, double @N
     final double[] edges = flatten(files, DataFileStatistics::getEdgeIntensities);
     final double[] heights = flatten(files,
         DataFileStatistics::getInjectionTimeCorrectedLowestIsotopeHeights);
-    if (files.size() < 2) {
+    if (files.stream().filter(file -> !file.featureStatistics().isEmpty()).count() < 2) {
       return new RawDataAnalysis(files, fwhms, points, edges, heights, new double[0], new double[0],
           Map.of());
     }
@@ -106,11 +112,29 @@ public record RawDataAnalysis(@NotNull List<DataFileStatistics> files, double @N
     final ModularFeatureList aligned = alignBenchmarkFeatures(files, null,
         new SimpleRunnableTask(() -> {
         }));
-    final int minimumDetections = (int) (files.size() * 0.8);
+    final int minimumDetections = Math.max(2, (int) Math.ceil(files.size() * 0.8));
     return new RawDataAnalysis(files, fwhms, points, edges, heights,
         extractSampleToSampleRtDeviations(aligned, minimumDetections),
-        extractFileMedianRtDeviations(aligned, Math.max(3, (int) Math.ceil(files.size() * 0.8))),
+        extractFileMedianRtDeviations(aligned, Math.max(3, minimumDetections)),
         extractSampleToSampleMzToleranceCounts(aligned, minimumDetections));
+  }
+
+  /**
+   * Switches all measurements, including cross-file alignment, to the retained broad signals. No
+   * mass detection or signal extraction is repeated.
+   */
+  public @NotNull RawDataAnalysis withBroadRejectedSignals() {
+    final List<DataFileStatistics> selected = files.stream()
+        .map(DataFileStatistics::forDirectInfusion).toList();
+    return selected.equals(files) ? this : analyze(selected);
+  }
+
+  public @NotNull RawDataAnalysis forSequence(@NotNull WizardSequence sequence) {
+    final boolean directOrFlow = sequence.get(WizardPart.ION_INTERFACE)
+        .map(WizardStepParameters::getFactory).map(
+            factory -> factory instanceof IonInterfaceWizardParameterFactory ionInterface
+                && ionInterface.group() == IonIterfaceGroup.DIRECT_AND_FLOW).orElse(false);
+    return directOrFlow ? withBroadRejectedSignals() : this;
   }
 
   /**

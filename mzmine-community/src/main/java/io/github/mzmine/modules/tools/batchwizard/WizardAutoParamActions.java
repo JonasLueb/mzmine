@@ -25,9 +25,8 @@
 
 package io.github.mzmine.modules.tools.batchwizard;
 
-import static io.github.mzmine.modules.tools.batchwizard.WizardPart.DATA_IMPORT;
-
 import io.github.mzmine.gui.mainwindow.SimpleTab;
+import io.github.mzmine.gui.preferences.MZminePreferences;
 import io.github.mzmine.javafx.components.factories.FxTextFlows;
 import io.github.mzmine.javafx.components.factories.FxTexts;
 import io.github.mzmine.javafx.dialogs.DialogLoggerUtil;
@@ -43,6 +42,8 @@ import io.github.mzmine.modules.tools.tools_autoparam.estimation.WizardParameter
 import io.github.mzmine.modules.tools.tools_autoparam.optimizer.BatchOptimizationMainTask;
 import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerModule;
 import io.github.mzmine.modules.tools.tools_autoparam.optimizer.OptimizerParameters;
+import io.github.mzmine.modules.tools.tools_autoparam.optimizer.SimpleOptimizerModule;
+import io.github.mzmine.modules.tools.tools_autoparam.optimizer.SimpleOptimizerParameters;
 import io.github.mzmine.modules.tools.tools_autoparam.preclassification.Preclassification;
 import io.github.mzmine.modules.tools.tools_autoparam.preclassification.PreclassificationParameters;
 import io.github.mzmine.modules.tools.tools_autoparam.preclassification.PreclassificationResult;
@@ -57,14 +58,18 @@ import io.github.mzmine.taskcontrol.TaskService;
 import io.github.mzmine.taskcontrol.TaskStatus;
 import io.github.mzmine.util.ExitCode;
 import io.github.mzmine.util.MemoryMapStorage;
+import io.mzio.users.user.CurrentUserService;
 import java.io.File;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.scene.control.ButtonType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -93,22 +98,44 @@ final class WizardAutoParamActions {
   }
 
   /**
-   * Disables estimation and optimization while a task runs. The parameter estimation needs
-   * chromatographic traces, so spatial imaging (MALDI, LDI, DESI, SIMS) is not supported.
+   * Disables estimation and optimization while a task runs or an imaging interface is selected.
+   * Chromatography, direct infusion, and flow injection use the shared isotope-supported estimator.
    */
   @NotNull BooleanBinding createDisabledBinding(
       @NotNull ReadOnlyObjectProperty<WizardStepParameters> selectedIonInterface) {
-    final BooleanBinding imagingSelected = Bindings.createBooleanBinding(
+    final BooleanBinding unsupportedInterfaceSelected = Bindings.createBooleanBinding(
         () -> selectedIonInterface.get() != null && selectedIonInterface.get()
             .getFactory() instanceof IonInterfaceWizardParameterFactory ionInterface
             && ionInterface.isImaging(), selectedIonInterface);
-    return runningTasks.greaterThan(0).or(imagingSelected);
+    return runningTasks.greaterThan(0).or(unsupportedInterfaceSelected);
   }
 
   /**
    * @param showStatistics opens the data file statistics dashboard after applying the estimates
    */
   void estimate(final boolean showStatistics) {
+    final String noWarningKey =
+        CurrentUserService.getUserName().orElse("no-user") + "-no-estimate-warning";
+    final boolean optedOut = Objects.requireNonNullElse(
+        ConfigService.getPreference(MZminePreferences.otherOptOutWarnings).get(noWarningKey),
+        false);
+    if (!optedOut) {
+      ButtonType clicked = DialogLoggerUtil.createAlertWithOptOutBlocking("Information",
+          "Estimation and optimization will apply processing and alter wizard settings.",
+          FxTextFlows.newTextFlow(FxTexts.text("""
+              Running parameter estimation or optimization will apply multiple mass detection steps to imported and already imported raw data.
+
+              - Present mass detection results will be overridden.
+              - Current wizard settings will be altered as a result of estimation
+              - Present parameter customisation in the advanced mode will be dropped""")),
+          "Don't show again",
+          optOutSelected -> ConfigService.getPreference(MZminePreferences.otherOptOutWarnings)
+              .put(noWarningKey, optOutSelected));
+      if (clicked == ButtonType.NO) {
+        return;
+      }
+    }
+
     if (runningTasks.get() > 0) {
       return;
     }
@@ -116,11 +143,14 @@ final class WizardAutoParamActions {
     if (input == null) {
       return;
     }
-    preclassify(input, ESTIMATE_ERROR,
-        preclassification -> startEstimation(input, preclassification, showStatistics));
+    startEstimation(input, showStatistics);
   }
 
-  void optimize() {
+  /**
+   * @param advancedSettings shows the full optimizer setup instead of the simple one that only
+   *                         selects the parameters to optimize
+   */
+  void optimize(final boolean advancedSettings) {
     if (runningTasks.get() > 0) {
       return;
     }
@@ -128,40 +158,33 @@ final class WizardAutoParamActions {
     if (input == null) {
       return;
     }
+    // decision: set up before the pre-classification, so cancelling does not import the files.
+    // The setup only depends on the wizard presets, which the pre-classification does not change.
+    final OptimizerParameters optimizerParam = setupOptimizer(advancedSettings);
+    if (optimizerParam == null) {
+      return;
+    }
     preclassify(input, OPTIMIZE_ERROR,
-        preclassification -> startOptimizer(input, preclassification));
+        preclassification -> startOptimizer(input, preclassification, optimizerParam));
   }
 
   /**
-   * The representative files of the data import step, see
-   * {@link RawDataPreparation#selectOptimizerInputFiles(File[])}. Selected once, so the random
-   * selection does not change between pre-classification and run.
+   * The representative files of the data import step. Selected once, so the random selection does
+   * not change between pre-classification and run.
    *
    * @return the files, null after showing an error if there are too few
    */
   private @Nullable InputFiles selectInputFiles(@NotNull String errorTitle, int minFiles) {
     wizard.updateAllParametersFromUi();
-    final WizardStepParameters importStep = wizard.getSequence().get(DATA_IMPORT).orElse(null);
-    if (importStep == null) {
-      DialogLoggerUtil.showErrorDialog(errorTitle, "The wizard has no data import step.");
+    try {
+      final RawDataPreparation.WizardAnalysisInput input =
+          RawDataPreparation.selectWizardAnalysisInput(wizard.getSequence(), minFiles,
+              RawDataPreparation.AnalysisInputSelectionMode.REPRESENTATIVE);
+      return new InputFiles(input.analysisFiles(), input.metadataFile());
+    } catch (IllegalStateException e) {
+      DialogLoggerUtil.showErrorDialog(errorTitle, e.getMessage());
       return null;
     }
-    final File[] allFiles = importStep.getValue(DataImportWizardParameters.fileNames);
-    if (allFiles == null || allFiles.length == 0) {
-      DialogLoggerUtil.showErrorDialog(errorTitle,
-          "Select at least one raw data file in the Data Import step first.");
-      return null;
-    }
-    final File[] files = RawDataPreparation.selectOptimizerInputFiles(allFiles);
-    if (files.length < minFiles) {
-      DialogLoggerUtil.showErrorDialog(errorTitle, """
-          This requires at least %d raw data files. Those data files need to be comparable (same \
-          instrument, same method, similar or same sample).""".formatted(minFiles));
-      return null;
-    }
-    final File metadataFile = importStep.getOptionalValue(DataImportWizardParameters.metadataFile)
-        .orElse(null);
-    return new InputFiles(files, metadataFile);
   }
 
   /**
@@ -209,17 +232,14 @@ final class WizardAutoParamActions {
     return dialog.getExitCode() == ExitCode.OK ? resolved.parameters() : null;
   }
 
-  /**
-   * @param preclassification the settings fixed by the pre-classification, see
-   *                          {@link PreclassificationParameters}
-   */
-  private void startEstimation(@NotNull InputFiles input, @NotNull ParameterSet preclassification,
-      final boolean showStatistics) {
-    // keep edits made while the pre-classification was running
+  private void startEstimation(@NotNull InputFiles input, final boolean showStatistics) {
+    // Copy on the JavaFX thread, so the background task never reads the live wizard.
     wizard.updateAllParametersFromUi();
     final WizardParameterEstimationTask task = new WizardParameterEstimationTask(
         MemoryMapStorage.forRawDataFile(), Instant.now(), input.files(), input.metadataFile(),
-        wizard.getSequence().copy(), preclassification, wizard::confirmAndSwitchPresets,
+        wizard.getSequence().copy(),
+        resolution -> resolvePreclassification(resolution, ESTIMATE_ERROR),
+        wizard::confirmAndSwitchPresets,
         result -> applyEstimation(result, showStatistics));
     startTask(task, ESTIMATE_ERROR);
   }
@@ -237,27 +257,49 @@ final class WizardAutoParamActions {
   }
 
   /**
-   * Shows the optimizer setup dialog after the pre-classification and starts the optimization.
+   * Starts the optimization after the pre-classification.
    *
    * @param preclassification the settings fixed by the pre-classification, see
    *                          {@link PreclassificationParameters}
+   * @param optimizerParam    the optimizer settings, see {@link #setupOptimizer(boolean)}
    */
-  private void startOptimizer(@NotNull InputFiles input, @NotNull ParameterSet preclassification) {
+  private void startOptimizer(@NotNull InputFiles input, @NotNull ParameterSet preclassification,
+      @NotNull OptimizerParameters optimizerParam) {
     // keep edits made while the pre-classification was running
     wizard.updateAllParametersFromUi();
-    final OptimizerParameters optimizerParam = (OptimizerParameters) ConfigService.getConfiguration()
-        .getModuleParameters(OptimizerModule.class);
-    // inject wizard sequence so the parameter checklist shows only relevant solutions
-    if (optimizerParam.showSetupDialog(true, wizard.getSequence()) != ExitCode.OK) {
-      return;
-    }
 
-    // a clone, so later edits of the module parameters do not change the running optimization
     final BatchOptimizationMainTask optimizer = new BatchOptimizationMainTask(
         MemoryMapStorage.forRawDataFile(), Instant.now(), input.files(), input.metadataFile(),
-        wizard, (OptimizerParameters) optimizerParam.cloneParameterSet(), preclassification);
+        wizard, optimizerParam, preclassification);
     // tracked like estimation, so no second run writes into the wizard and errors are shown
     startTask(optimizer, OPTIMIZE_ERROR);
+  }
+
+  /**
+   * Shows the optimizer setup. The wizard sequence limits the parameter checklist to the parameters
+   * that apply to its presets.
+   *
+   * @param advancedSettings shows the full setup, otherwise the simple setup that only selects the
+   *                         parameters to optimize and uses defaults for all other settings
+   * @return the full parameters, independent of the module configuration, so later edits do not
+   * change the running optimization. null if the user cancelled.
+   */
+  private @Nullable OptimizerParameters setupOptimizer(final boolean advancedSettings) {
+    if (advancedSettings) {
+      final OptimizerParameters fullParam = (OptimizerParameters) ConfigService.getConfiguration()
+          .getModuleParameters(OptimizerModule.class);
+      if (fullParam.showSetupDialog(true, wizard.getSequence()) != ExitCode.OK) {
+        return null;
+      }
+      return (OptimizerParameters) fullParam.cloneParameterSet();
+    }
+
+    final SimpleOptimizerParameters simpleParam = (SimpleOptimizerParameters) ConfigService.getConfiguration()
+        .getModuleParameters(SimpleOptimizerModule.class);
+    if (simpleParam.showSetupDialog(true, wizard.getSequence()) != ExitCode.OK) {
+      return null;
+    }
+    return OptimizerParameters.create(simpleParam);
   }
 
   /**
@@ -280,6 +322,10 @@ final class WizardAutoParamActions {
       });
     });
     TaskService.getController().addTask(task);
+  }
+
+  public IntegerProperty runningTasksProperty() {
+    return runningTasks;
   }
 
   /**

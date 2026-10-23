@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2024 The MZmine Development Team
+ * Copyright (c) 2004-2026 The mzmine Development Team
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -26,19 +26,23 @@
 package io.github.mzmine.modules.io.import_rawdata_bruker_tdf.datamodel.sql;
 
 import com.google.common.collect.Range;
+import io.github.mzmine.datamodel.features.ModularDataModel;
+import io.github.mzmine.datamodel.features.rawfiletypes.AcquisitionSoftwareType;
+import io.github.mzmine.datamodel.features.rawfiletypes.AcquisitionSoftwareVersionType;
+import io.github.mzmine.datamodel.features.rawfiletypes.InstrumentModelType;
+import io.github.mzmine.datamodel.features.rawfiletypes.InstrumentSerialNumberType;
+import io.github.mzmine.datamodel.features.rawfiletypes.InstrumentVendorType;
+import io.github.mzmine.datamodel.features.rawfiletypes.OperatorNameType;
+import io.github.mzmine.datamodel.features.rawfiletypes.SampleNameType;
+import io.github.mzmine.datamodel.features.types.abstr.StringType;
+import io.github.mzmine.datamodel.features.types.annotations.AcquisitionMethodType;
 import io.github.mzmine.main.MZmineCore;
 import io.github.mzmine.util.date.DateTimeUtils;
 import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
-import io.github.mzmine.datamodel.AcquisitionMetadata;
-import io.github.mzmine.datamodel.AcquisitionMetadata.Field;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -165,46 +169,60 @@ public class TDFMetaDataTable extends TDFDataTable<String> {
     }
   }
 
-  // we only keep these keys from the metadata table. Add more, if we need anything else.
-  public enum Keys {
-    SchemaType, SchemaVersionMajor, SchemaVersionMinor, MzAcqRangeLower, MzAcqRangeUpper,
-    OneOverK0AcqRangeLower, OneOverK0AcqRangeUpper, AcquisitionSoftwareVersion, InstrumentName,
-    Description, SampleName, MethodName, HasProfileSpectra, HasLineSpectra, ImagingAreaMinXIndexPos,
-    Geometry, ImagingAreaMaxXIndexPos, ImagingAreaMinYIndexPos, ImagingAreaMaxYIndexPos,
-    AcquisitionDateTime;
+  /**
+   * Sets all values of keys that map to a raw file metadata type.
+   *
+   * @param metadata the file metadata of the raw data file
+   */
+  public void applyToFileMetadata(@NotNull final ModularDataModel metadata) {
+    for (final Keys key : Keys.values()) {
+      final Class<? extends StringType> type = key.getFileMetadataType();
+      if (type == null) {
+        continue;
+      }
+      final String value = getValueForKey(key);
+      if (value != null && !value.isBlank()) {
+        metadata.set(type, value.strip());
+      }
+    }
   }
 
-  /** Reuses parsed SQLite metadata; names and study fields are retained only inside mzmine. */
+  // we only keep these keys from the metadata table. Add more, if we need anything else.
+  public enum Keys {
+    SchemaType, SchemaVersionMajor, SchemaVersionMinor, MzAcqRangeLower, MzAcqRangeUpper, OneOverK0AcqRangeLower, OneOverK0AcqRangeUpper, //
+    AcquisitionSoftware(AcquisitionSoftwareType.class), //
+    AcquisitionSoftwareVendor, //
+    AcquisitionSoftwareVersion(AcquisitionSoftwareVersionType.class), //
+    InstrumentName(InstrumentModelType.class), //
+    InstrumentVendor(InstrumentVendorType.class), //
+    InstrumentSerialNumber(InstrumentSerialNumberType.class), //
+    OperatorName(OperatorNameType.class), //
+    Description, //
+    SampleName(SampleNameType.class), //
+    MethodName(AcquisitionMethodType.class), //
+    HasProfileSpectra, HasLineSpectra, ImagingAreaMinXIndexPos, Geometry, ImagingAreaMaxXIndexPos, ImagingAreaMinYIndexPos, ImagingAreaMaxYIndexPos, AcquisitionDateTime;
 
+    private final @Nullable Class<? extends StringType> fileMetadataType;
+
+    Keys() {
+      this(null);
+    }
+
+    Keys(@Nullable final Class<? extends StringType> fileMetadataType) {
+      this.fileMetadataType = fileMetadataType;
+    }
+
+    /**
+     * @return the raw file metadata type this key is mapped to or null
+     */
+    public @Nullable Class<? extends StringType> getFileMetadataType() {
+      return fileMetadataType;
+    }
+  }
 
   public String getValueForKey(Keys key) {
     int index = keyCol.indexOf(key.toString());
     return index != -1 ? valueCol.get(index) : "";
   }
 
-  /** Retains selected vendor header values without turning them into editable study metadata. */
-  public @NotNull AcquisitionMetadata acquisitionMetadata(final @NotNull Collection<Long> scanModes) {
-    final Map<String, String> fields = new LinkedHashMap<>();
-    for (final Keys key : List.of(Keys.InstrumentName, Keys.AcquisitionSoftwareVersion,
-        Keys.SampleName, Keys.MethodName, Keys.Description)) {
-      final String value = getValueForKey(key);
-      if (value != null && !value.isBlank()) {
-        fields.put(key.name(), value);
-      }
-    }
-    final List<AcquisitionMetadata.Term> terms = new ArrayList<>(AcquisitionMetadata.resolveLabel(
-        Field.INSTRUMENT_MODEL, getValueForKey(Keys.InstrumentName)));
-    // Native scan-mode declarations are evidence for DDA/DIA; MS levels alone are not.
-    if (scanModes.contains(1L)) {
-      terms.addAll(AcquisitionMetadata.resolve("MS:1003221"));
-    }
-    if (scanModes.contains(9L)) {
-      terms.addAll(AcquisitionMetadata.resolve("MS:1003215"));
-    }
-    fields.put("Acquisition scan modes", scanModes.stream().distinct().sorted().map(mode ->
-        io.github.mzmine.modules.io.import_rawdata_bruker_tdf.datamodel.BrukerScanMode.fromScanMode(
-            mode.intValue()).getDescription() + " (" + mode + ")")
-        .collect(java.util.stream.Collectors.joining(", ")));
-    return new AcquisitionMetadata(terms, fields);
-  }
 }
