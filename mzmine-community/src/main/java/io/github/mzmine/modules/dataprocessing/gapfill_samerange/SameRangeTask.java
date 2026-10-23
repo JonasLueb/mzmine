@@ -29,6 +29,7 @@ import com.google.common.collect.Range;
 import io.github.mzmine.datamodel.DataPoint;
 import io.github.mzmine.datamodel.FeatureStatus;
 import io.github.mzmine.datamodel.MZmineProject;
+import io.github.mzmine.datamodel.featuredata.FeatureDataUtils;
 import io.github.mzmine.datamodel.RawDataFile;
 import io.github.mzmine.datamodel.Scan;
 import io.github.mzmine.datamodel.features.Feature;
@@ -139,6 +140,18 @@ class SameRangeTask extends AbstractTask {
     /* End Parallel Implementation */
 
     // Canceled?
+    if (isCanceled()) {
+      return;
+    }
+
+    // row-dependent normalization needs the row of a feature, which is only set when the feature
+    // is added. Apply once to all features and update the row bindings again
+    if (FeatureDataUtils.applyRowDependentIntensityNormalization(processedPeakList)) {
+      processedPeakList.applyRowBindings();
+    }
+
+    // canceled while the normalization was applied: the gap-filled copy is not published and the
+    // original stays in the project
     if (isCanceled()) {
       return;
     }

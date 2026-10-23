@@ -27,6 +27,7 @@ package io.github.mzmine.modules.dataprocessing.gapfill_peakfinder.multithreaded
 
 import com.google.common.util.concurrent.AtomicDouble;
 import io.github.mzmine.datamodel.MZmineProject;
+import io.github.mzmine.datamodel.featuredata.FeatureDataUtils;
 import io.github.mzmine.datamodel.features.FeatureList;
 import io.github.mzmine.datamodel.features.FeatureListRow;
 import io.github.mzmine.datamodel.features.ModularFeatureList;
@@ -177,10 +178,20 @@ class MultiThreadPeakFinderMainTask extends AbstractTask {
         new SimpleFeatureListAppliedMethod("Gap filling ", MultiThreadPeakFinderModule.class,
             parameters, getModuleCallDate()));
 
+    // row-dependent normalization needs the row of a feature, which is only set when the feature
+    // is added. Apply once to all features before the row bindings
+    FeatureDataUtils.applyRowDependentIntensityNormalization(processedPeakList);
+
     // update all rows by row bindings (average values)
     // this needs to be done after all tasks finish because values were not updated when
     // adding features
     processedPeakList.applyRowBindings();
+
+    // canceled while the normalization and row bindings were applied: a copy is not published and
+    // the original stays in the project. An in-place list keeps its completed values
+    if (isCanceled()) {
+      return;
+    }
 
     // add / remove or rename the new feature list in project
     originalFeatureListOption.reflectNewFeatureListToProject(suffix, project, processedPeakList,
