@@ -56,6 +56,7 @@ import io.github.mzmine.datamodel.otherdetectors.MrmTransitionList;
 import io.github.mzmine.modules.dataprocessing.featdet_smoothing.SmoothingAlgorithm;
 import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMS2Processor;
 import io.github.mzmine.modules.dataprocessing.filter_groupms2.GroupMS2SubParameters;
+import io.github.mzmine.modules.dataprocessing.norm_intensity.NormalizationRowIdentity;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.taskcontrol.AbstractTask;
 import io.github.mzmine.taskcontrol.TaskStatus;
@@ -208,6 +209,10 @@ public class FeatureResolverTask extends AbstractTask {
   }
 
   private void dimensionIndependentResolve(ModularFeatureList originalFeatureList) {
+    // A single raw file is the normal resolver input but does not prove that persisted
+    // row-dependent normalization is absent.
+    NormalizationRowIdentity.requireIdentityPreservingTransformation(originalFeatureList,
+        "resolve chromatograms");
     final Resolver resolver = ((GeneralResolverParameters) parameters).getResolver(parameters,
         originalFeatureList);
     if (resolver == null) {

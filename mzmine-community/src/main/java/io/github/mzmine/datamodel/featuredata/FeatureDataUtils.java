@@ -34,6 +34,7 @@ import io.github.mzmine.datamodel.data_access.FeatureDataAccess;
 import io.github.mzmine.datamodel.featuredata.impl.StorageUtils;
 import io.github.mzmine.datamodel.featuredata.impl.SummedIntensityMobilitySeries;
 import io.github.mzmine.datamodel.features.FeatureList;
+import io.github.mzmine.datamodel.features.FeatureListRow;
 import io.github.mzmine.datamodel.features.ModularFeature;
 import io.github.mzmine.datamodel.features.types.numbers.AreaType;
 import io.github.mzmine.datamodel.features.types.numbers.HeightType;
@@ -483,13 +484,44 @@ public class FeatureDataUtils {
 
   public static void normalizeAbundances(@NotNull ModularFeature feature,
       @Nullable final NormalizationFunction normalizer) {
-    if (normalizer == null) {
-      return;
-    }
+    normalizeAbundances(feature, normalizer, feature.getFeatureList().getFeatureRow(feature));
+  }
 
-    final double factor = normalizer.getNormalizationFactor(feature.getMZ(), feature.getRT());
-    feature.set(NormalizedAreaType.class, (float) (feature.getArea() * factor));
-    feature.set(NormalizedHeightType.class, (float) (feature.getHeight() * factor));
+  /** Applies a row-aware function, preserving missing corrections for unsupported rows. */
+  public static void normalizeAbundances(@NotNull final ModularFeature feature,
+      @Nullable final NormalizationFunction normalizer, @Nullable final FeatureListRow row) {
+    if (normalizer == null) return;
+    final NormalizedAbundances normalized = calculateNormalizedAbundances(feature, normalizer, row);
+    feature.set(NormalizedAreaType.class, normalized.area());
+    feature.set(NormalizedHeightType.class, normalized.height());
+  }
+
+  /** Calculates normalized abundance values without mutating the feature. */
+  public static @NotNull NormalizedAbundances calculateNormalizedAbundances(
+      @NotNull final ModularFeature feature, @Nullable final NormalizationFunction normalizer,
+      @Nullable final FeatureListRow row) {
+    if (normalizer == null) return NormalizedAbundances.EMPTY;
+    final java.util.OptionalDouble resolved = normalizer.getNormalizationFactor(row, feature.getMZ(),
+        feature.getRT());
+    if (resolved.isEmpty()) {
+      return NormalizedAbundances.EMPTY;
+    }
+    final double factor = resolved.getAsDouble();
+    final Float area = feature.getArea();
+    final Float height = feature.getHeight();
+    return new NormalizedAbundances(scaleFiniteAbundance(area, factor),
+        scaleFiniteAbundance(height, factor));
+  }
+
+  private static @Nullable Float scaleFiniteAbundance(@Nullable final Float measured,
+      final double factor) {
+    if (measured == null || !Float.isFinite(measured)) return null;
+    final float normalized = (float) (measured * factor);
+    return Float.isFinite(normalized) ? normalized : null;
+  }
+
+  public record NormalizedAbundances(@Nullable Float area, @Nullable Float height) {
+    public static final @NotNull NormalizedAbundances EMPTY = new NormalizedAbundances(null, null);
   }
 
   /**
@@ -499,7 +531,7 @@ public class FeatureDataUtils {
     flist.streamFeatures().forEach(FeatureDataUtils::clearIntensityNormalization);
   }
 
-  private static void clearIntensityNormalization(ModularFeature feature) {
+  public static void clearIntensityNormalization(ModularFeature feature) {
     feature.set(NormalizedAreaType.class, null);
     feature.set(NormalizedHeightType.class, null);
   }

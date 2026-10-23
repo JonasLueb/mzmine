@@ -42,6 +42,7 @@ import io.github.mzmine.datamodel.features.SimpleFeatureListAppliedMethod;
 import io.github.mzmine.datamodel.features.types.FeatureDataType;
 import io.github.mzmine.gui.preferences.MZminePreferences;
 import io.github.mzmine.main.MZmineCore;
+import io.github.mzmine.modules.dataprocessing.norm_intensity.NormalizationRowIdentity;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.parametertypes.OriginalFeatureListHandlingParameter.OriginalFeatureListOption;
 import io.github.mzmine.parameters.parametertypes.tolerances.MZTolerance;
@@ -129,7 +130,16 @@ public class ImsExpanderTask extends AbstractTask {
       setStatus(TaskStatus.ERROR);
       return;
     }
-
+    // Single-file IMS input is the ordinary workflow, but persisted projects can still carry a
+    // row-dependent normalization whose frozen identities expansion would invalidate.
+    try {
+      NormalizationRowIdentity.requireIdentityPreservingTransformation(flist,
+          "expand ion-mobility traces");
+    } catch (final IllegalStateException exception) {
+      setErrorMessage(exception.getMessage());
+      setStatus(TaskStatus.ERROR);
+      return;
+    }
     totalRows = flist.getNumberOfRows();
 
     final ModularFeatureList newFlist = new ModularFeatureList(flist.getName() + SUFFIX,

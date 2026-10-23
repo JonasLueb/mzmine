@@ -58,6 +58,7 @@ import io.github.mzmine.datamodel.features.types.numbers.MobilityType;
 import io.github.mzmine.datamodel.identities.iontype.IonNetworkLogic;
 import io.github.mzmine.gui.framework.fx.features.ParentFeatureListPaneGroup;
 import io.github.mzmine.modules.dataprocessing.align_join.RowAlignmentScoreCalculator;
+import io.github.mzmine.modules.dataprocessing.norm_intensity.NormalizationRowIdentity;
 import io.github.mzmine.modules.visualization.featurelisttable_modular.FeatureTableFX;
 import io.github.mzmine.util.collections.BinarySearch;
 import io.github.mzmine.util.collections.IndexRange;
@@ -658,6 +659,9 @@ public class FeatureListUtils {
    * @param featureList target list
    */
   public static void sortByDefault(FeatureList featureList, boolean renumberIDs) {
+    if (renumberIDs) {
+      NormalizationRowIdentity.requireRenumberingAllowed(featureList);
+    }
     featureList.applyDefaultRowsSorting();
 
     if (!renumberIDs) {
@@ -863,6 +867,9 @@ public class FeatureListUtils {
       @Nullable String fullTitle, final @Nullable String suffix, final MemoryMapStorage storage,
       boolean copyRows, List<RawDataFile> dataFiles, boolean renumberIDs,
       final @Nullable Integer totalRows, final @Nullable Integer totalFeatures) {
+    if (renumberIDs) {
+      NormalizationRowIdentity.requireRenumberingAllowed(featureList);
+    }
     if (StringUtils.isBlank(fullTitle) && StringUtils.isBlank(suffix)) {
       throw new IllegalArgumentException("Either suffix or fullTitle need a value");
     }
@@ -922,6 +929,9 @@ public class FeatureListUtils {
       @Nullable final String fullTitle, @Nullable final String suffix,
       @Nullable final MemoryMapStorage storage,
       @NotNull final Collection<? extends FeatureListRow> rowsToKeep, final boolean renumberIDs) {
+    if (renumberIDs) {
+      NormalizationRowIdentity.requireRenumberingAllowed(source);
+    }
     final int totalFeatures = rowsToKeep.stream().mapToInt(FeatureListRow::getNumberOfFeatures)
         .sum();
     final ModularFeatureList target = createCopy(source, fullTitle, suffix, storage, false,
@@ -971,11 +981,55 @@ public class FeatureListUtils {
       }
       ModularFeatureListRow copy = new ModularFeatureListRow(newFeatureList,
           renumberIDs ? id : row.getID(), (ModularFeatureListRow) row, true);
-      newFeatureList.addRow(copy);
+      if (renumberIDs) {
+        newFeatureList.addRow(copy);
+      }
       rowMapping.put(row, copy);
       id++;
     }
+    if (!renumberIDs) {
+      insertCopiedRowsPreservingIdentity(orderedRows, rowMapping, newFeatureList);
+    }
     return rowMapping;
+  }
+
+  /**
+   * Validates an identity-preserving copy once, then restores all rows through the target's
+   * explicit exact-identity path. The ordered source list preserves sorting and the caller's
+   * identity map handles deduplication; this method does not infer copies from generic addRow.
+   */
+  public static void insertCopiedRowsPreservingIdentity(
+      @NotNull final Collection<? extends FeatureListRow> orderedSourceRows,
+      @NotNull final Map<FeatureListRow, ? extends ModularFeatureListRow> rowMapping,
+      @NotNull final ModularFeatureList target) {
+    if (orderedSourceRows.isEmpty()) {
+      return;
+    }
+    final FeatureList source = orderedSourceRows.iterator().next().getFeatureList();
+    if (NormalizationRowIdentity.requiresRowIdentityProtection(source)
+        || NormalizationRowIdentity.requiresRowIdentityProtection(target)) {
+      if (!NormalizationRowIdentity.hasSameActiveNormalization(source, target)) {
+        throw new IllegalArgumentException("Copied rows require matching active normalization.");
+      }
+    }
+    final Set<Integer> ids = new HashSet<>(rowMapping.size());
+    final List<ModularFeatureListRow> copiedRows = new ArrayList<>(rowMapping.size());
+    final Set<FeatureListRow> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    for (final FeatureListRow sourceRow : orderedSourceRows) {
+      if (!seen.add(sourceRow)) {
+        continue;
+      }
+      final ModularFeatureListRow copiedRow = rowMapping.get(sourceRow);
+      if (copiedRow == null) {
+        throw new IllegalArgumentException("Copied row mapping is incomplete.");
+      }
+      if (sourceRow.getFeatureList() != source || sourceRow.getID() != copiedRow.getID()
+          || !ids.add(copiedRow.getID())) {
+        throw new IllegalArgumentException("Copied rows must preserve unique source row IDs.");
+      }
+      copiedRows.add(copiedRow);
+    }
+    target.restoreRowsWithExactIds(copiedRows);
   }
 
   /**
@@ -1046,6 +1100,11 @@ public class FeatureListUtils {
       @NotNull ModularFeatureList target, boolean transferTypes) {
     if (sources.isEmpty()) {
       throw new IllegalArgumentException("No source feature list");
+    }
+    if (sources.size() > 1 && sources.stream()
+        .anyMatch(NormalizationRowIdentity::hasActiveRowDependentNormalization)) {
+      throw new IllegalStateException("Cannot merge feature lists while a source has a latest "
+          + "row-dependent intensity normalization. Its frozen row IDs cannot be remapped.");
     }
     final FeatureList source = sources.getFirst();
 

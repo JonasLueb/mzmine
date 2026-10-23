@@ -42,6 +42,7 @@ import io.github.mzmine.datamodel.features.types.annotations.GNPSSpectralLibrary
 import io.github.mzmine.datamodel.features.types.numbers.IDType;
 import io.github.mzmine.datamodel.features.types.otherdectectors.MsOtherCorrelationResultType;
 import io.github.mzmine.modules.dataprocessing.group_compoundgrouper.CompoundGrouperModule;
+import io.github.mzmine.modules.dataprocessing.norm_intensity.NormalizationRowIdentity;
 import io.github.mzmine.modules.dataprocessing.id_gnpsresultsimport.GNPSLibraryMatch.ATT;
 import io.github.mzmine.parameters.ParameterSet;
 import io.github.mzmine.parameters.parametertypes.MinimumSamplesFilter;
@@ -266,6 +267,10 @@ public class RowsFilterTask extends AbstractTask {
     if (!isCanceled()) {
 
       try {
+        // Must happen before filtering, copying, publishing, or in-place mutation.
+        if (renumber) {
+          NormalizationRowIdentity.requireRenumberingAllowed(origFeatureList);
+        }
         setStatus(TaskStatus.PROCESSING);
         logger.info("Filtering feature list rows");
 
@@ -431,9 +436,15 @@ public class RowsFilterTask extends AbstractTask {
         index++;
         ModularFeatureListRow resetRow = new ModularFeatureListRow(newFeatureList,
             renumber ? index : row.getID(), (ModularFeatureListRow) row, true);
-          oldToNew.put(row, resetRow);
+        if (renumber) {
+          newFeatureList.addRow(resetRow);
+        }
+        oldToNew.put(row, resetRow);
       }
-      // set all new rows at once
+      if (!renumber) {
+        FeatureListUtils.insertCopiedRowsPreservingIdentity(rowsToAdd, oldToNew, newFeatureList);
+      }
+      // Sort copied rows after their identity-preserving insertion.
       newFeatureList.setRowsApplySort(oldToNew.values().toArray(FeatureListRow[]::new));
     }
 
